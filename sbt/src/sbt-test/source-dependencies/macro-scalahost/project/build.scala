@@ -3,7 +3,6 @@ import Keys._
 
 object build extends Build {
 	val defaultSettings = Seq(
-		libraryDependencies += "org.scalareflect" %% "scalahost" % "0.1.0-SNAPSHOT",
 		libraryDependencies <+= scalaVersion("org.scala-lang" % "scala-reflect" % _ ),
 		incOptions := incOptions.value.withNameHashing(true),
 		scalaVersion := "2.11.0-RC3",
