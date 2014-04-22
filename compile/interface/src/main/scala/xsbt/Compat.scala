@@ -92,6 +92,21 @@ abstract class Compat
 
 	private[this] final implicit def miscCompat(n: AnyRef): MiscCompat = new MiscCompat
 
+	def extractPalladiumAttachments(tree: Tree): Set[Symbol] = {
+		implicit def withAttachments(tree: Tree): WithAttachments = new WithAttachments(tree)
+		class WithAttachments(val tree: Tree) {
+			object EmptyAttachments {
+				def all = Set.empty[Any]
+			}
+			val attachments = EmptyAttachments
+		}
+
+		tree.attachments.all.collect {
+			case pal: { def touchedSymbols: List[Symbol] } if pal.getClass.getName == "scala.tools.nsc.palladium.Attachments$ExpansionSummaryAttachment" =>
+				pal.touchedSymbols
+		}.flatten.toSet
+	}
+
 	object MacroExpansionOf {
 		def unapply(tree: Tree): Option[Tree] = {
 
