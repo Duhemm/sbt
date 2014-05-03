@@ -55,6 +55,9 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType) ext
     }
 
     def handleTreeNode(node: Tree): Unit = {
+
+      extractPalladiumAttachments(node) foreach addSymbol
+
       def handleMacroExpansion(original: Tree): Unit = {
         // Some macros seem to have themselves registered as original tree.
         // In this case, we only need to handle the children of the original tree,
