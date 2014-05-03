@@ -51,6 +51,10 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile
 					val dependenciesByInheritance = extractDependenciesByInheritance(unit)
 					for(on <- dependenciesByInheritance)
 						processDependency(on, inherited=true)
+
+					val dependenciesByMacro = extractDependenciesByMacro(unit)
+					for(on <- dependenciesByMacro)
+						processDependency(on, inherited=true)
 				} else {
 					for(on <- unit.depends) processDependency(on, inherited=false)
 					for(on <- inheritedDependencies.getOrElse(sourceFile, Nil: Iterable[Symbol])) processDependency(on, inherited=true)
@@ -60,7 +64,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile
 				 * that is coming from either source code (not necessarily compiled in this compilation
 				 * run) or from class file and calls respective callback method.
 				 */
-				def processDependency(on: Symbol, inherited: Boolean)
+				def processDependency(on: Symbol, inherited: Boolean = false, macro: Boolean = false)
 				{
 					def binaryDependency(file: File, className: String) = callback.binaryDependency(file, className, sourceFile, inherited)
 					val onSource = on.sourceFile
@@ -174,8 +178,27 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile
 	}
 
 	private final class ExtractDependenciesByInheritanceTraverser extends ExtractDependenciesTraverser {
-		override def traverse(tree: Tree): Unit = {
+		override def traverse(tree: Tree): Unit = tree match {
+			case Template(parents, self, body) =>
+				// we are using typeSymbol and not typeSymbolDirect because we want
+				// type aliases to be expanded
+				val parentTypeSymbols = parents.map(parent => parent.tpe.typeSymbol).toSet
+				debuglog("Parent type symbols for " + tree.pos + ": " + parentTypeSymbols.map(_.fullName))
+				parentTypeSymbols.foreach(addDependency)
+				traverseTrees(body)
+			case tree => super.traverse(tree)
+		}
+	}
 
+	private def extractDependenciesByInheritance(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
+		val traverser = new ExtractDependenciesByInheritanceTraverser
+		traverser.traverse(unit.body)
+		val dependencies = traverser.dependencies
+		dependencies.map(enclosingTopLevelClass)
+	}
+
+	private final class ExtractDependenciesByMacroTraverser extends ExtractDependenciesTraverser {
+		override def traverse(tree: Tree): Unit = {
 			/*
 			 * Dependencies collected by scalahost are registered as dependency by inheritance,
 			 * since we need to trigger recompilation of the macro client whenever the slightest
@@ -185,22 +208,11 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile
 			 */
 			val pal = extractPalladiumAttachments(tree)
 			pal.foreach(addDependency)
-
-			tree match {
-				case Template(parents, self, body) =>
-					// we are using typeSymbol and not typeSymbolDirect because we want
-					// type aliases to be expanded
-					val parentTypeSymbols = parents.map(parent => parent.tpe.typeSymbol).toSet
-					debuglog("Parent type symbols for " + tree.pos + ": " + parentTypeSymbols.map(_.fullName))
-					parentTypeSymbols.foreach(addDependency)
-					traverseTrees(body)
-				case tree => super.traverse(tree)
-			}
 		}
 	}
 
-	private def extractDependenciesByInheritance(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
-		val traverser = new ExtractDependenciesByInheritanceTraverser
+	private def extractDependenciesByMacro(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
+		val traverser = new ExtractDependenciesByMacroTraverser
 		traverser.traverse(unit.body)
 		val dependencies = traverser.dependencies
 		dependencies.map(enclosingTopLevelClass)
