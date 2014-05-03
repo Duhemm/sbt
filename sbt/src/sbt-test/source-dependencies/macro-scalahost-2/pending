@@ -1,0 +1,9 @@
+> compile
+
+# Remove a method from Foo, we should therefore recompile
+# Client.scala which lists members of Foo.
+$ copy-file changes/Foo.scala macro-provider/src/main/scala/Foo.scala
+
+> compile
+
+> macro-client/check-recompiled Client.scala

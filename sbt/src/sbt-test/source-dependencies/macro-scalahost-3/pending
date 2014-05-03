@@ -1,0 +1,9 @@
+> compile
+
+# Rename the argument of Foo.bar. We should therefore recompile
+# Client.scala because it inspected this method.
+$ copy-file changes/Foo.scala macro-provider/src/main/scala/Foo.scala
+
+> compile
+
+> macro-client/check-recompiled Client.scala
