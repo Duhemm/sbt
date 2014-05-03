@@ -89,23 +89,27 @@ abstract class Compat {
 
   private[this] final implicit def miscCompat(n: AnyRef): MiscCompat = new MiscCompat
 
+  // Trees have no attachments in 2.8.x and 2.9.x
+  object TreeAttachmentsCompat {
+
+    // This attachment was introduced with Scala 2.10 and contains the original
+    // tree before the expansion of the macro.
+    // In Scala 2.11 it because MacroExpansionAttachment(expanded, expandee)
+    class MacroExpansionAttachment(val original: Tree)
+
+    implicit def withAttachments(tree: Tree): WithAttachments = new WithAttachments(tree)
+    class WithAttachments(val tree: Tree) {
+      object EmptyAttachments {
+        def all = Set.empty[Any]
+      }
+      val attachments = EmptyAttachments
+    }
+  }
+
   object MacroExpansionOf {
     def unapply(tree: Tree): Option[Tree] = {
 
-      // MacroExpansionAttachment (MEA) compatibility for 2.8.x and 2.9.x
-      object Compat {
-        class MacroExpansionAttachment(val original: Tree)
-
-        // Trees have no attachments in 2.8.x and 2.9.x
-        implicit def withAttachments(tree: Tree): WithAttachments = new WithAttachments(tree)
-        class WithAttachments(val tree: Tree) {
-          object EmptyAttachments {
-            def all = Set.empty[Any]
-          }
-          val attachments = EmptyAttachments
-        }
-      }
-      import Compat._
+      import TreeAttachmentsCompat._
 
       locally {
         // Wildcard imports are necessary since 2.8.x and 2.9.x don't have `MacroExpansionAttachment` at all
@@ -125,5 +129,18 @@ abstract class Compat {
         }
       }
     }
+  }
+
+  def extractPalladiumAttachments(tree: Tree): Set[Symbol] = {
+    import TreeAttachmentsCompat._
+
+    tree.attachments.all.collect {
+      case syms: Map[String, Any] =>
+        println("TROUVE : " + syms.get("touchedSymbols").getOrElse(Nil).asInstanceOf[List[Symbol]].mkString(", "))
+        syms.get("touchedSymbols").getOrElse(Nil).asInstanceOf[List[Symbol]]
+      case x: AnyRef =>
+        println("Touve un truc bizarre : " + x.getClass.getName)
+        Nil.asInstanceOf[List[Symbol]]
+    }.flatten.toSet
   }
 }
