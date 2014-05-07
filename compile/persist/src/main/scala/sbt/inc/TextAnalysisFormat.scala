@@ -117,6 +117,8 @@ object TextAnalysisFormat {
       val memberRefExternalDep = "member reference external dependencies"
       val inheritanceInternalDep = "inheritance internal dependencies"
       val inheritanceExternalDep = "inheritance external dependencies"
+      val fromMacroInternalDep = "from macro internal dependencies"
+      val fromMacroExternalDep = "from macro external dependencies"
 
       val usedNames = "used names"
     }
@@ -149,6 +151,8 @@ object TextAnalysisFormat {
         relations.memberRef else Relations.emptySourceDependencies
       val inheritance = if (nameHashing)
         relations.inheritance else Relations.emptySourceDependencies
+      val fromMacro = if (nameHashing)
+        relations.fromMacro else Relations.emptySourceDependencies
       val names = if (nameHashing) relations.names else Relation.empty[File, String]
 
       writeRelation(Headers.directSrcDep, direct.internal)
@@ -160,6 +164,8 @@ object TextAnalysisFormat {
       writeRelation(Headers.memberRefExternalDep, memberRef.external)
       writeRelation(Headers.inheritanceInternalDep, inheritance.internal)
       writeRelation(Headers.inheritanceExternalDep, inheritance.external)
+      writeRelation(Headers.fromMacroInternalDep, fromMacro.internal)
+      writeRelation(Headers.fromMacroExternalDep, fromMacro.external)
 
       writeRelation(Headers.classes, relations.classes)
       writeRelation(Headers.usedNames, names)
@@ -220,6 +226,11 @@ object TextAnalysisFormat {
         val externalInheritanceDep = readStringRelation(Headers.inheritanceExternalDep)
         makeSourceDependencies(internalInheritanceDep, externalInheritanceDep)
       }
+      val fromMacroSrcDeps: SourceDependencies = {
+        val internalFromMacroDep = readFileRelation(Headers.fromMacroInternalDep)
+        val externalFromMacroDep = readStringRelation(Headers.fromMacroExternalDep)
+        makeSourceDependencies(internalFromMacroDep, externalFromMacroDep)
+      }
       // we don't check for emptiness of publicInherited/inheritance relations because
       // we assume that invariant that says they are subsets of direct/memberRef holds
       assert(nameHashing || (memberRefSrcDeps == emptySourceDependencies),
@@ -230,7 +241,7 @@ object TextAnalysisFormat {
       val names = readStringRelation(Headers.usedNames)
 
       if (nameHashing)
-        Relations.make(srcProd, binaryDep, memberRefSrcDeps, inheritanceSrcDeps, classes, names)
+        Relations.make(srcProd, binaryDep, memberRefSrcDeps, inheritanceSrcDeps, fromMacroSrcDeps, classes, names)
       else {
         assert(names.all.isEmpty, "When `nameHashing` is disabled `names` relation " +
           s"should be empty: $names")

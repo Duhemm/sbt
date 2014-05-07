@@ -41,22 +41,26 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
         if (global.callback.nameHashing) {
           val dependenciesByMemberRef = extractDependenciesByMemberRef(unit)
           for (on <- dependenciesByMemberRef)
-            processDependency(on, inherited = false)
+            processDependency(on, inherited = false, fromMacro = false)
 
           val dependenciesByInheritance = extractDependenciesByInheritance(unit)
           for (on <- dependenciesByInheritance)
-            processDependency(on, inherited = true)
+            processDependency(on, inherited = true, fromMacro = false)
+
+          val dependenciesByMacroExpansion = extractDependenciesByMacroExpansion(unit)
+          for (on <- dependenciesByMacroExpansion)
+            processDependency(on, inherited = false, fromMacro = true)
         } else {
-          for (on <- unit.depends) processDependency(on, inherited = false)
-          for (on <- inheritedDependencies.getOrElse(sourceFile, Nil: Iterable[Symbol])) processDependency(on, inherited = true)
+          for (on <- unit.depends) processDependency(on, inherited = false, fromMacro = false)
+          for (on <- inheritedDependencies.getOrElse(sourceFile, Nil: Iterable[Symbol])) processDependency(on, inherited = true, fromMacro = false)
         }
         /**
          * Handles dependency on given symbol by trying to figure out if represents a term
          * that is coming from either source code (not necessarily compiled in this compilation
          * run) or from class file and calls respective callback method.
          */
-        def processDependency(on: Symbol, inherited: Boolean) {
-          def binaryDependency(file: File, className: String) = callback.binaryDependency(file, className, sourceFile, inherited)
+        def processDependency(on: Symbol, inherited: Boolean, fromMacro: Boolean) {
+          def binaryDependency(file: File, className: String) = callback.binaryDependency(file, className, sourceFile, inherited, fromMacro)
           val onSource = on.sourceFile
           if (onSource == null) {
             classFile(on) match {
@@ -179,6 +183,18 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
   private def extractDependenciesByInheritance(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
     val traverser = new ExtractDependenciesByInheritanceTraverser
     traverser.traverse(unit.body)
+    val dependencies = traverser.dependencies
+    dependencies.map(enclosingTopLevelClass)
+  }
+
+  private final class ExtractDependenciesByMacroExpansionTraverser extends ExtractDependenciesTraverser {
+    // Implement when we have a way to record de dependencies from macro expansions
+    override def traverse(tree: Tree): Unit = ()
+  }
+
+  private def extractDependenciesByMacroExpansion(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
+    val traverser = new ExtractDependenciesByMacroExpansionTraverser
+    unit.body.foreach(traverser.traverse)
     val dependencies = traverser.dependencies
     dependencies.map(enclosingTopLevelClass)
   }

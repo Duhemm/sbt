@@ -53,7 +53,7 @@ trait Analysis {
 
   def addSource(src: File, api: Source, stamp: Stamp, directInternal: Iterable[File], inheritedInternal: Iterable[File], info: SourceInfo): Analysis
   def addBinaryDep(src: File, dep: File, className: String, stamp: Stamp): Analysis
-  def addExternalDep(src: File, dep: String, api: Source, inherited: Boolean): Analysis
+  def addExternalDep(src: File, dep: String, api: Source, inherited: Boolean, fromMacro: Boolean): Analysis
   def addProduct(src: File, product: File, stamp: Stamp, name: String): Analysis
 
   /** Partitions this Analysis using the discriminator function. Externalizes internal deps that cross partitions. */
@@ -161,8 +161,8 @@ private class MAnalysis(val stamps: Stamps, val apis: APIs, val relations: Relat
   def addBinaryDep(src: File, dep: File, className: String, stamp: Stamp): Analysis =
     copy(stamps.markBinary(dep, className, stamp), apis, relations.addBinaryDep(src, dep), infos)
 
-  def addExternalDep(src: File, dep: String, depAPI: Source, inherited: Boolean): Analysis =
-    copy(stamps, apis.markExternalAPI(dep, depAPI), relations.addExternalDep(src, dep, inherited), infos)
+  def addExternalDep(src: File, dep: String, depAPI: Source, inherited: Boolean, fromMacro: Boolean): Analysis =
+    copy(stamps, apis.markExternalAPI(dep, depAPI), relations.addExternalDep(src, dep, inherited, fromMacro), infos)
 
   def addProduct(src: File, product: File, stamp: Stamp, name: String): Analysis =
     copy(stamps.markProduct(product, stamp), apis, relations.addProduct(src, product, name), infos)
