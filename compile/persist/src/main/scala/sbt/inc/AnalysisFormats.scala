@@ -103,7 +103,8 @@ object AnalysisFormats {
           sourceDependencies.internal.all.isEmpty && sourceDependencies.external.all.isEmpty
         // we check direct dependencies only because publicInherited dependencies are subset of direct
         assert(isEmpty(direct), "Direct dependencies are not empty but `nameHashing` flag is enabled.")
-        Relations.make(srcProd, binaryDep, memberRef, inheritance, classes, names)
+        // TODO Figure out what fromMacro should be equal to
+        Relations.make(srcProd, binaryDep, memberRef, inheritance, Relations.emptySourceDependencies, classes, names)
       } else {
         def isEmpty(sourceDependencies: SourceDependencies): Boolean =
           sourceDependencies.internal.all.isEmpty && sourceDependencies.external.all.isEmpty

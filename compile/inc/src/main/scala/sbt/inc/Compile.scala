@@ -80,8 +80,8 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
   // inherited internal source dependencies
   private[this] val inheritedSourceDeps = new HashMap[File, Set[File]]
   // external source dependencies:
-  //   (internal source, external source depended on, API of external dependency, true if an inheritance dependency)
-  private[this] val extSrcDeps = new ListBuffer[(File, String, Source, Boolean)]
+  //   (internal source, external source depended on, API of external dependency, true if an inheritance dependency, true if dep. comes from a macro expansion)
+  private[this] val extSrcDeps = new ListBuffer[(File, String, Source, Boolean, Boolean)]
   private[this] val binaryClassName = new HashMap[File, String]
   // source files containing a macro def.
   private[this] val macroSources = Set[File]()
@@ -102,13 +102,13 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
       add(sourceDeps, source, dependsOn)
       if (inherited) add(inheritedSourceDeps, source, dependsOn)
     }
-  def externalBinaryDependency(binary: File, className: String, source: File, inherited: Boolean) {
+  def externalBinaryDependency(binary: File, className: String, source: File, inherited: Boolean, fromMacro: Boolean) {
     binaryClassName.put(binary, className)
     add(binaryDeps, source, binary)
   }
-  def externalSourceDependency(t4: (File, String, Source, Boolean)) = extSrcDeps += t4
+  def externalSourceDependency(t5: (File, String, Source, Boolean, Boolean)) = extSrcDeps += t5
 
-  def binaryDependency(classFile: File, name: String, source: File, inherited: Boolean) =
+  def binaryDependency(classFile: File, name: String, source: File, inherited: Boolean, fromMacro: Boolean) =
     internalMap(classFile) match {
       case Some(dependsOn) =>
         // dependency is a product of a source not included in this compilation
@@ -120,18 +120,18 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
             //  but not in the same compiler run (as in javac v. scalac)
             sourceDependency(dependsOn, source, inherited)
           case None =>
-            externalDependency(classFile, name, source, inherited)
+            externalDependency(classFile, name, source, inherited, fromMacro)
         }
     }
 
-  private[this] def externalDependency(classFile: File, name: String, source: File, inherited: Boolean): Unit =
+  private[this] def externalDependency(classFile: File, name: String, source: File, inherited: Boolean, fromMacro: Boolean): Unit =
     externalAPI(classFile, name) match {
       case Some(api) =>
         // dependency is a product of a source in another project
-        externalSourceDependency((source, name, api, inherited))
+        externalSourceDependency((source, name, api, inherited, fromMacro))
       case None =>
         // dependency is some other binary on the classpath
-        externalBinaryDependency(classFile, name, source, inherited)
+        externalBinaryDependency(classFile, name, source, inherited, fromMacro)
     }
 
   def generatedClass(source: File, module: File, name: String) =
@@ -178,7 +178,7 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
         a.addSource(src, s, stamp, direct, publicInherited, info)
     }
   def getOrNil[A, B](m: collection.Map[A, Seq[B]], a: A): Seq[B] = m.get(a).toList.flatten
-  def addExternals(base: Analysis): Analysis = (base /: extSrcDeps) { case (a, (source, name, api, inherited)) => a.addExternalDep(source, name, api, inherited) }
+  def addExternals(base: Analysis): Analysis = (base /: extSrcDeps) { case (a, (source, name, api, inherited, fromMacro)) => a.addExternalDep(source, name, api, inherited, fromMacro) }
   def addCompilation(base: Analysis): Analysis = base.copy(compilations = base.compilations.add(compilation))
   def addUsedNames(base: Analysis): Analysis = (base /: usedNames) {
     case (a, (src, names)) =>

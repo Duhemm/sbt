@@ -546,7 +546,11 @@ private final class IncrementalNameHashing(log: Logger, options: IncOptions) ext
     // This includes non-inheritance dependencies and is not transitive.
     log.debug(s"Getting sources that directly depend on (external) $modified.")
     val memberRefB = memberRefInvalidationExternal(modified)
-    transitiveInheritance ++ memberRefA ++ memberRefB
+    // Get the sources that use a macro that introduced dependencies during its expansion
+    val macroDeps = relations.fromMacro.external.reverse(modified)
+    log.debug(s"Files invalidated because of dependencies on $modified introduced by a macro expansion: $macroDeps")
+
+    transitiveInheritance ++ memberRefA ++ memberRefB ++ macroDeps
   }
 
   private def invalidateByInheritance(relations: Relations, modified: File): Set[File] = {
