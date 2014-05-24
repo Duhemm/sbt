@@ -1,0 +1,14 @@
+> compile
+
+# Change the body of the macro `hello`. We should recompile macro-client/Client.scala
+# that uses this macro
+$ copy-file changes/Provider.scala macro-provider/Provider.scala
+
+# Introduce a dummy change in the same project as Client.scala so that a recompilation
+# occurs in its project and we can see whether Client.scala has been recompiled
+$ copy-file changes/Foo.scala macro-client/Foo.scala
+
+> compile
+
+> macro-client/check-recompiled Client.scala
+
