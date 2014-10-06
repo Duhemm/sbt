@@ -6,6 +6,7 @@ package xsbt
 import scala.tools.nsc.{ io, symtab, Phase }
 import io.{ AbstractFile, PlainFile, ZipArchive }
 import symtab.Flags
+import xsbti.DependencyContext._
 
 import java.io.File
 
@@ -69,8 +70,10 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
                 }
               case None => ()
             }
-          } else if (onSource.file != sourceFile)
-            callback.sourceDependency(onSource.file, sourceFile, inherited)
+          } else if (onSource.file != sourceFile) {
+            val context = if (inherited) DependencyByInheritance else DependencyByMemberRef
+            callback.sourceDependency(onSource.file, sourceFile, context)
+          }
         }
       }
     }

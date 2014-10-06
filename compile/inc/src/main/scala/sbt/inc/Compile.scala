@@ -6,7 +6,7 @@ package inc
 
 import xsbti.api.{ Source, SourceAPI, Compilation, OutputSetting, _internalOnly_NameHashes }
 import xsbti.compile.{ DependencyChanges, Output, SingleOutput, MultipleOutput }
-import xsbti.{ Position, Problem, Severity }
+import xsbti.{ Position, Problem, Severity, DependencyContext => XDependencyContext }
 import Logger.{ m2o, problem }
 import java.io.File
 import xsbti.api.Definition
@@ -61,7 +61,7 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
     new Compilation(System.currentTimeMillis, outputSettings)
   }
 
-  override def toString = (List("APIs", "Binary deps", "Products", "Source deps") zip List(apis, binaryDeps, classes, sourceDeps)).map { case (label, map) => label + "\n\t" + map.mkString("\n\t") }.mkString("\n")
+  override def toString = (List("APIs", "Binary deps", "Products", "Source deps") zip List(apis, binaryDeps, classes, intSrcDeps)).map { case (label, map) => label + "\n\t" + map.mkString("\n\t") }.mkString("\n")
 
   import collection.mutable.{ HashMap, HashSet, ListBuffer, Map, Set }
 
@@ -75,12 +75,10 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
   private[this] val classes = new HashMap[File, Set[(File, String)]]
   // generated class file to its source file
   private[this] val classToSource = new HashMap[File, File]
-  // all internal source depenencies, including direct and inherited
-  private[this] val sourceDeps = new HashMap[File, Set[File]]
-  // inherited internal source dependencies
-  private[this] val inheritedSourceDeps = new HashMap[File, Set[File]]
+  // internal source dependencies
+  private[this] val intSrcDeps = new HashMap[File, Set[InternalDependency]]
   // external source dependencies
-  private[this] val extSrcDeps = new HashMap[File, Iterable[ExternalDependency]]
+  private[this] val extSrcDeps = new HashMap[File, Set[ExternalDependency]]
   private[this] val binaryClassName = new HashMap[File, String]
   // source files containing a macro def.
   private[this] val macroSources = Set[File]()
@@ -96,33 +94,40 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
       }
     }
 
-  def sourceDependency(dependsOn: File, source: File, inherited: Boolean) =
-    {
-      add(sourceDeps, source, dependsOn)
-      if (inherited) add(inheritedSourceDeps, source, dependsOn)
-    }
+  def XDependencyContextToDependencyContext(context: XDependencyContext): DependencyContext = context match {
+    case XDependencyContext.DependencyByMemberRef   => DependencyByMemberRef
+    case XDependencyContext.DependencyByInheritance => DependencyByInheritance
+    case _ =>
+      // Would IllegalArgumentException be better ?
+      throw new UnsupportedOperationException("Unknown dependency context : " + context)
+  }
+
+  def sourceDependency(dependsOn: File, source: File, context: XDependencyContext) = {
+    val dependency = InternalDependency(source, dependsOn, XDependencyContextToDependencyContext(context))
+    add(intSrcDeps, source, dependency)
+  }
+
   def externalBinaryDependency(binary: File, className: String, source: File, inherited: Boolean) {
     binaryClassName.put(binary, className)
     add(binaryDeps, source, binary)
   }
 
-  // The type corresponds to : (internal source, external source depended on, API of external dependency, true if an inheritance dependency)
-  def externalSourceDependency(t4: (File, String, Source, Boolean)) = {
-    val dependency = ExternalDependency(t4._1, t4._2, t4._3, if (t4._4) DependencyByInheritance else DependencyByMemberRef)
-    extSrcDeps += t4._1 -> (extSrcDeps.getOrElse(t4._1, Nil) ++ List(dependency))
-  }
+  def externalSourceDependency(dependency: ExternalDependency) =
+    add(extSrcDeps, dependency.sourceFile, dependency)
 
   def binaryDependency(classFile: File, name: String, source: File, inherited: Boolean) =
     internalMap(classFile) match {
       case Some(dependsOn) =>
         // dependency is a product of a source not included in this compilation
-        sourceDependency(dependsOn, source, inherited)
+        val context = if (inherited) XDependencyContext.DependencyByInheritance else XDependencyContext.DependencyByMemberRef
+        sourceDependency(dependsOn, source, context)
       case None =>
         classToSource.get(classFile) match {
           case Some(dependsOn) =>
             // dependency is a product of a source in this compilation step,
             //  but not in the same compiler run (as in javac v. scalac)
-            sourceDependency(dependsOn, source, inherited)
+            val context = if (inherited) XDependencyContext.DependencyByInheritance else XDependencyContext.DependencyByInheritance
+            sourceDependency(dependsOn, source, context)
           case None =>
             externalDependency(classFile, name, source, inherited)
         }
@@ -132,7 +137,8 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
     externalAPI(classFile, name) match {
       case Some(api) =>
         // dependency is a product of a source in another project
-        externalSourceDependency((source, name, api, inherited))
+        val dep = ExternalDependency(source, name, api, if (inherited) DependencyByInheritance else DependencyByMemberRef)
+        externalSourceDependency(dep)
       case None =>
         // dependency is some other binary on the classpath
         externalBinaryDependency(classFile, name, source, inherited)
@@ -193,13 +199,11 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
         val hasMacro: Boolean = macroSources.contains(src)
         val s = new xsbti.api.Source(compilation, hash, api._2, api._1, publicNameHashes(src), hasMacro)
         val info = SourceInfos.makeInfo(getOrNil(reporteds, src), getOrNil(unreporteds, src))
-        val direct = sourceDeps.getOrElse(src, Nil: Iterable[File])
-        val publicInherited = inheritedSourceDeps.getOrElse(src, Nil: Iterable[File])
         val binaries = binaryDeps.getOrElse(src, Nil: Iterable[File])
         val prods = classes.getOrElse(src, Nil: Iterable[(File, String)])
 
         val products = prods.map { case (prod, name) => (prod, name, current product prod) }
-        val internalDeps = direct.map(InternalDependency(src, _, DependencyByMemberRef)) ++ publicInherited.map(InternalDependency(src, _, DependencyByInheritance))
+        val internalDeps = intSrcDeps.getOrElse(src, Nil: Iterable[InternalDependency])
         val externalDeps = extSrcDeps.getOrElse(src, Nil: Iterable[ExternalDependency])
         val binDeps = binaries.map(d => (d, binaryClassName(d), current binary d))
 

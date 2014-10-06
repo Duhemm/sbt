@@ -13,6 +13,8 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier.{ STATIC, PUBLIC, ABSTRACT }
 import java.net.URL
 
+import xsbti.{ DependencyContext => XDependencyContext }
+
 private[sbt] object Analyze {
   def apply[T](newClasses: Seq[File], sources: Seq[File], log: Logger)(analysis: xsbti.AnalysisCallback, loader: ClassLoader, readAPI: (File, Seq[Class[_]]) => Set[String]) {
     val sourceMap = sources.toSet[File].groupBy(_.getName)
@@ -49,7 +51,7 @@ private[sbt] object Analyze {
             else {
               assume(url.getProtocol == "file")
               productToSource.get(file) match {
-                case Some(dependsOn) => analysis.sourceDependency(dependsOn, source, inherited)
+                case Some(dependsOn) => analysis.sourceDependency(dependsOn, source, if (inherited) XDependencyContext.DependencyByInheritance else XDependencyContext.DependencyByMemberRef)
                 case None            => analysis.binaryDependency(file, tpe, source, inherited)
               }
             }
