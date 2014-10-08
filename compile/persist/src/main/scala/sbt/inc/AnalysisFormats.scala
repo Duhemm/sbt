@@ -6,6 +6,7 @@ package inc
 
 import xsbti.api.{ Source, Compilation }
 import xsbti.{ Position, Problem, Severity }
+import xsbti.DependencyContext._
 import xsbti.compile.{ CompileOrder, Output => APIOutput, SingleOutput, MultipleOutput }
 import MultipleOutput.OutputGroup
 import java.io.File

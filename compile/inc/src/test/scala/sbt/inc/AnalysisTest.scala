@@ -1,6 +1,7 @@
 package sbt
 package inc
 
+import xsbti.DependencyContext._
 import java.io.File
 import scala.math.abs
 import sbt.inc.TestCaseGenerators._

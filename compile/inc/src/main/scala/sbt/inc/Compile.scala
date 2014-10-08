@@ -6,7 +6,7 @@ package inc
 
 import xsbti.api.{ Source, SourceAPI, Compilation, OutputSetting, _internalOnly_NameHashes }
 import xsbti.compile.{ DependencyChanges, Output, SingleOutput, MultipleOutput }
-import xsbti.{ Position, Problem, Severity, DependencyContext => XDependencyContext }
+import xsbti.{ Position, Problem, Severity, DependencyContext }
 import Logger.{ m2o, problem }
 import java.io.File
 import xsbti.api.Definition
@@ -94,16 +94,8 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
       }
     }
 
-  def XDependencyContextToDependencyContext(context: XDependencyContext): DependencyContext = context match {
-    case XDependencyContext.DependencyByMemberRef   => DependencyByMemberRef
-    case XDependencyContext.DependencyByInheritance => DependencyByInheritance
-    case _ =>
-      // Would IllegalArgumentException be better ?
-      throw new UnsupportedOperationException("Unknown dependency context : " + context)
-  }
-
-  def sourceDependency(dependsOn: File, source: File, context: XDependencyContext) = {
-    val dependency = InternalDependency(source, dependsOn, XDependencyContextToDependencyContext(context))
+  def sourceDependency(dependsOn: File, source: File, context: DependencyContext) = {
+    val dependency = InternalDependency(source, dependsOn, context)
     add(intSrcDeps, source, dependency)
   }
 
@@ -115,7 +107,7 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
   def externalSourceDependency(dependency: ExternalDependency) =
     add(extSrcDeps, dependency.sourceFile, dependency)
 
-  def binaryDependency(classFile: File, name: String, source: File, context: XDependencyContext) =
+  def binaryDependency(classFile: File, name: String, source: File, context: DependencyContext) =
     internalMap(classFile) match {
       case Some(dependsOn) =>
         // dependency is a product of a source not included in this compilation
@@ -131,11 +123,11 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
         }
     }
 
-  private[this] def externalDependency(classFile: File, name: String, source: File, context: XDependencyContext): Unit =
+  private[this] def externalDependency(classFile: File, name: String, source: File, context: DependencyContext): Unit =
     externalAPI(classFile, name) match {
       case Some(api) =>
         // dependency is a product of a source in another project
-        val dep = ExternalDependency(source, name, api, XDependencyContextToDependencyContext(context))
+        val dep = ExternalDependency(source, name, api, context)
         externalSourceDependency(dep)
       case None =>
         // dependency is some other binary on the classpath
