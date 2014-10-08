@@ -43,26 +43,26 @@ private[sbt] object Analyze {
     for ((source, classFiles) <- sourceToClassFiles) {
       val publicInherited = readAPI(source, classFiles.toSeq.flatMap(c => load(c.className, Some("Error reading API from class file"))))
 
-      def processDependency(tpe: String, inherited: Boolean) {
+      def processDependency(tpe: String, context: XDependencyContext) {
         trapAndLog(log) {
           for (url <- Option(loader.getResource(tpe.replace('.', '/') + ClassExt)); file <- urlAsFile(url, log)) {
             if (url.getProtocol == "jar")
-              analysis.binaryDependency(file, tpe, source, inherited)
+              analysis.binaryDependency(file, tpe, source, context)
             else {
               assume(url.getProtocol == "file")
               productToSource.get(file) match {
-                case Some(dependsOn) => analysis.sourceDependency(dependsOn, source, if (inherited) XDependencyContext.DependencyByInheritance else XDependencyContext.DependencyByMemberRef)
-                case None            => analysis.binaryDependency(file, tpe, source, inherited)
+                case Some(dependsOn) => analysis.sourceDependency(dependsOn, source, context)
+                case None            => analysis.binaryDependency(file, tpe, source, context)
               }
             }
           }
         }
       }
-      def processDependencies(tpes: Iterable[String], inherited: Boolean): Unit = tpes.foreach(tpe => processDependency(tpe, inherited))
+      def processDependencies(tpes: Iterable[String], context: XDependencyContext): Unit = tpes.foreach(tpe => processDependency(tpe, context))
 
       val notInherited = classFiles.flatMap(_.types).toSet -- publicInherited
-      processDependencies(notInherited, false)
-      processDependencies(publicInherited, true)
+      processDependencies(notInherited, XDependencyContext.DependencyByMemberRef)
+      processDependencies(publicInherited, XDependencyContext.DependencyByInheritance)
     }
 
     for (source <- sources filterNot sourceToClassFiles.keySet) {

@@ -107,7 +107,7 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
     add(intSrcDeps, source, dependency)
   }
 
-  def externalBinaryDependency(binary: File, className: String, source: File, inherited: Boolean) {
+  def externalBinaryDependency(binary: File, className: String, source: File) {
     binaryClassName.put(binary, className)
     add(binaryDeps, source, binary)
   }
@@ -115,33 +115,31 @@ private final class AnalysisCallback(internalMap: File => Option[File], external
   def externalSourceDependency(dependency: ExternalDependency) =
     add(extSrcDeps, dependency.sourceFile, dependency)
 
-  def binaryDependency(classFile: File, name: String, source: File, inherited: Boolean) =
+  def binaryDependency(classFile: File, name: String, source: File, context: XDependencyContext) =
     internalMap(classFile) match {
       case Some(dependsOn) =>
         // dependency is a product of a source not included in this compilation
-        val context = if (inherited) XDependencyContext.DependencyByInheritance else XDependencyContext.DependencyByMemberRef
         sourceDependency(dependsOn, source, context)
       case None =>
         classToSource.get(classFile) match {
           case Some(dependsOn) =>
             // dependency is a product of a source in this compilation step,
             //  but not in the same compiler run (as in javac v. scalac)
-            val context = if (inherited) XDependencyContext.DependencyByInheritance else XDependencyContext.DependencyByInheritance
             sourceDependency(dependsOn, source, context)
           case None =>
-            externalDependency(classFile, name, source, inherited)
+            externalDependency(classFile, name, source, context)
         }
     }
 
-  private[this] def externalDependency(classFile: File, name: String, source: File, inherited: Boolean): Unit =
+  private[this] def externalDependency(classFile: File, name: String, source: File, context: XDependencyContext): Unit =
     externalAPI(classFile, name) match {
       case Some(api) =>
         // dependency is a product of a source in another project
-        val dep = ExternalDependency(source, name, api, if (inherited) DependencyByInheritance else DependencyByMemberRef)
+        val dep = ExternalDependency(source, name, api, XDependencyContextToDependencyContext(context))
         externalSourceDependency(dep)
       case None =>
         // dependency is some other binary on the classpath
-        externalBinaryDependency(classFile, name, source, inherited)
+        externalBinaryDependency(classFile, name, source)
     }
 
   def generatedClass(source: File, module: File, name: String) =
