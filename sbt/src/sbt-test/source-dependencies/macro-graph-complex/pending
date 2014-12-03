@@ -1,0 +1,9 @@
+> compile
+
+# Add a new method to Helper, we should therefore recompile
+# Client.scala because it uses a macro that depends on Helper.scala.
+$ copy-file changes/Helper.scala helper/src/main/scala/Helper.scala
+
+> compile
+
+> macro-client/check-recompiled Client.scala
