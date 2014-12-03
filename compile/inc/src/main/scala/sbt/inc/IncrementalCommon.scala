@@ -159,7 +159,15 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
       if (dups.nonEmpty)
         log.debug("Invalidated due to generated class file collision: " + dups)
 
-      val inv = propagated ++ dups // ++ scopeInvalidations(previous.extAPI _, changes.modified, changes.names)
+      // Compute the set of all macro providers that (transitively) depend on any of the
+      // sources that have been recompiled.
+      val allImpactedByChanges = transitiveDependencies(dependsOnSrc, recompiledSources)
+      val macroProviders = previous.fromMacroImpl.internal._1s
+      val impactedMacroProviders = macroProviders intersect allImpactedByChanges
+      if (impactedMacroProviders.nonEmpty)
+        log.debug("Invalidated macro providers because of a recompiled transitive dependency: " + impactedMacroProviders)
+
+      val inv = propagated ++ dups ++ impactedMacroProviders // ++ scopeInvalidations(previous.extAPI _, changes.modified, changes.names)
       val newlyInvalidated = inv -- recompiledSources
       log.debug("All newly invalidated sources after taking into account (previously) recompiled sources:" + newlyInvalidated)
       if (newlyInvalidated.isEmpty) Set.empty else inv

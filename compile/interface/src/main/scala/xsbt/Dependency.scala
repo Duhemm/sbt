@@ -48,6 +48,11 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
           val dependenciesByInheritance = extractDependenciesByInheritance(unit)
           for (on <- dependenciesByInheritance)
             processDependency(on, context = DependencyByInheritance)
+
+          val dependenciesFromMacroImpl = extractDependenciesFromMacroImpl(unit)
+          for (on <- dependenciesFromMacroImpl)
+            processDependency(on, context = DependencyFromMacroImpl)
+
         } else {
           for (on <- unit.depends) processDependency(on, context = DependencyByMemberRef)
           for (on <- inheritedDependencies.getOrElse(sourceFile, Nil: Iterable[Symbol])) processDependency(on, context = DependencyByInheritance)
@@ -184,6 +189,24 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
 
   private def extractDependenciesByInheritance(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
     val traverser = new ExtractDependenciesByInheritanceTraverser
+    traverser.traverse(unit.body)
+    val dependencies = traverser.dependencies
+    dependencies.map(enclosingTopLevelClass)
+  }
+
+  private final class ExtractDependenciesFromMacroImplTraverser extends ExtractDependenciesTraverser {
+    override def traverse(tree: Tree): Unit = tree match {
+      // TODO: Find a correct heuristic to detect macro implementations and macro bundles.
+      case node: DefDef if node.toString contains "macro" =>
+        val traverser = new ExtractDependenciesByMemberRefTraverser
+        traverser.traverse(node)
+        traverser.dependencies.foreach(addDependency)
+      case tree => super.traverse(tree)
+    }
+  }
+
+  private def extractDependenciesFromMacroImpl(unit: CompilationUnit): collection.immutable.Set[Symbol] = {
+    val traverser = new ExtractDependenciesFromMacroImplTraverser
     traverser.traverse(unit.body)
     val dependencies = traverser.dependencies
     dependencies.map(enclosingTopLevelClass)
