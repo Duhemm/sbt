@@ -57,7 +57,15 @@ private final class IncrementalNameHashing(log: Logger, options: IncOptions) ext
     // This includes non-inheritance dependencies and is not transitive.
     log.debug(s"Getting sources that directly depend on (external) $modified.")
     val memberRefB = memberRefInvalidationExternal(modified)
-    transitiveInheritance ++ memberRefA ++ memberRefB
+
+    // Given an external API change, let's see what are all the files that are potentially affected in this subproject
+    // The macro implementations that depend on any of these files should be recompiled.
+    val allImpacted = transitiveDeps(relations.usesExternal(modified))(relations.usesInternalSrc)
+    val impactedMacroProviders = allImpacted flatMap (relations.fromMacroImpl.internal.reverse)
+    if (!impactedMacroProviders.isEmpty)
+      log.debug(s"Invalidated macro providers because of external API change: $impactedMacroProviders")
+
+    transitiveInheritance ++ memberRefA ++ memberRefB ++ impactedMacroProviders
   }
 
   private def invalidateByInheritance(relations: Relations, modified: File): Set[File] = {
