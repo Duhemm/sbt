@@ -162,8 +162,7 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
       // Compute the set of all macro providers that (transitively) depend on any of the
       // sources that have been recompiled.
       val allImpactedByChanges = transitiveDependencies(dependsOnSrc, recompiledSources)
-      val macroProviders = previous.fromMacroImpl.internal._1s
-      val impactedMacroProviders = macroProviders intersect allImpactedByChanges
+      val impactedMacroProviders = allImpactedByChanges flatMap (previous.fromMacroImpl.internal.reverse)
       if (impactedMacroProviders.nonEmpty)
         log.debug("Invalidated macro providers because of a recompiled transitive dependency: " + impactedMacroProviders)
 
