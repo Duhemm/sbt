@@ -195,12 +195,34 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
   }
 
   private final class ExtractDependenciesFromMacroImplTraverser extends ExtractDependenciesTraverser {
+    import DetectMacroImpls._
+
+    private def hasContextAsParameter(node: DefDef): Boolean =
+      node.vparamss.flatten exists (p => isContextCompatible(p.tpt.symbol))
+
+    /**
+     * Determines whether a `ClassDef` looks like a macro bundle by checking whether its constructor
+     * accepts an argument that may be used as a `Context`.
+     */
+    private def looksLikeMacroBundle(cl: ClassDef): Boolean = {
+      val ctor = cl.symbol.asType.primaryConstructor
+      ctor.paramss.flatten exists (p => isContextCompatible(p.tpe.typeSymbol))
+    }
+
+    /** Collects all the symbols that are accessed by member reference in this node */
+    private def collectSymbols(node: Tree): Unit = {
+      val traverser = new ExtractDependenciesByMemberRefTraverser
+      traverser.traverse(node)
+      traverser.dependencies foreach addDependency
+    }
+
     override def traverse(tree: Tree): Unit = tree match {
-      // TODO: Find a correct heuristic to detect macro implementations and macro bundles.
-      case node: DefDef if node.toString contains "macro" =>
-        val traverser = new ExtractDependenciesByMemberRefTraverser
-        traverser.traverse(node)
-        traverser.dependencies.foreach(addDependency)
+      case node: DefDef if hasContextAsParameter(node) =>
+        collectSymbols(node)
+
+      case node: ClassDef if looksLikeMacroBundle(node) =>
+        collectSymbols(node)
+
       case tree => super.traverse(tree)
     }
   }
