@@ -60,6 +60,8 @@ private[inc] class MemberRefInvalidator(log: Logger) {
       new NameHashFilteredInvalidator[T](usedNames, memberRef, modifiedNames.regularNames)
     case _: SourceAPIChange[_] =>
       sys.error(wrongAPIChangeMsg)
+    case _: RecompiledWithoutAPIChanges[_] =>
+      (_: T) => Set.empty
   }
 
   def invalidationReason(apiChange: APIChange[_]): String = apiChange match {
@@ -73,6 +75,8 @@ private[inc] class MemberRefInvalidator(log: Logger) {
 				|\t${modifiedNames.regularNames.mkString(", ")}.""".stripMargin
     case _: SourceAPIChange[_] =>
       sys.error(wrongAPIChangeMsg)
+    case RecompiledWithoutAPIChanges(modifiedSrcFile) =>
+      s"The $modifiedSrcFile source file has been recompiled but its API has not changed."
   }
 
   private val wrongAPIChangeMsg =

@@ -31,6 +31,12 @@ final case class SourceAPIChange[T](modified0: T) extends APIChange(modified0)
 final case class NamesChange[T](modified0: T, modifiedNames: ModifiedNames) extends APIChange(modified0)
 
 /**
+ * An APIChange that indicates that a file has been recompiled but its API has not changed.
+ * This information may be relevant to macro implementations.
+ */
+final case class RecompiledWithoutAPIChanges[T](modified0: T) extends APIChange(modified0)
+
+/**
  * ModifiedNames are determined by comparing name hashes in two versions of an API representation.
  *
  * Note that we distinguish between sets of regular (non-implicit) and implicit modified names.

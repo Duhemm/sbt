@@ -68,6 +68,8 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
       apiChanges foreach {
         case APIChangeDueToMacroDefinition(src) =>
           log.debug(s"Public API is considered to be changed because $src contains a macro definition.")
+        case RecompiledWithoutAPIChanges(src) =>
+          log.debug(s"$src has been recompiled and its API has not changed.")
         case apiChange @ (_: SourceAPIChange[T] | _: NamesChange[T]) =>
           val src = apiChange.modified
           val oldApi = oldAPIMapping(src)
@@ -135,7 +137,34 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
       val binaryDepChanges = previous.allBinaries.filter(externalBinaryModified(entry, forEntry, previous, current)).toSet
       val extChanges = changedIncremental(previousAPIs.allExternals, previousAPIs.externalAPI _, currentExternalAPI(entry, forEntry))
 
-      InitialChanges(srcChanges, removedProducts, binaryDepChanges, extChanges)
+      // We have collected all the changes that were visible. However, if macros are involved,
+      // we may need to issue more APIChanges or specify that more internal source files have been changed.
+
+      val completeExternalChanges = extChanges.apiChanges.foldLeft(List[APIChange[String]]()) {
+
+        case (acc, orig @ RecompiledWithoutAPIChanges(src)) =>
+          val analysis = analysisForClass(entry, forEntry)(src)
+          val correspondingFile = analysis.relations.definesClass(src)
+          val transitive = transitiveDependencies(analysis.relations.usesInternalSrc, correspondingFile).toList flatMap (analysis.relations.classNames)
+          orig :: (transitive map RecompiledWithoutAPIChanges[String]) ::: acc
+
+        case (acc, other) => other :: acc
+      }
+
+      val newSrcChanges = {
+        val externalModified = completeExternalChanges map (_.modified)
+        val usesModified = externalModified flatMap (previousAnalysis.relations.usesExternal)
+        val impactedByChanges = transitiveDeps(srcChanges.changed union usesModified.toSet)(previousAnalysis.relations.usesInternalSrc)
+
+        new Changes[File] {
+          val removed = srcChanges.removed
+          val added = srcChanges.added
+          val changed = impactedByChanges
+          val unmodified = srcChanges.unmodified -- impactedByChanges
+        }
+      }
+
+      InitialChanges(newSrcChanges, removedProducts, binaryDepChanges, new APIChanges(completeExternalChanges))
     }
 
   def changes(previous: Set[File], current: Set[File], existingModified: File => Boolean): Changes[File] =
@@ -322,7 +351,21 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
         } yield analysis.apis.internalAPI(src)
       )
 
+  /**
+   * Returns a function that, given a fully qualified class name, returns the Analysis that holds information
+   * about that class.
+   */
+  private def analysisForClass(entry: String => Option[File], forEntry: File => Option[Analysis]): String => Analysis =
+    className =>
+      orEmpty(
+        for {
+          e <- entry(className)
+          analysis <- forEntry(e)
+        } yield analysis
+      )
+
   def orEmpty(o: Option[Source]): Source = o getOrElse APIs.emptySource
+  def orEmpty(o: Option[Analysis]): Analysis = o getOrElse Analysis.empty(options.nameHashing)
   def orTrue(o: Option[Boolean]): Boolean = o getOrElse true
 
   protected def transitiveDeps[T](nodes: Iterable[T])(dependencies: T => Iterable[T]): Set[T] =
