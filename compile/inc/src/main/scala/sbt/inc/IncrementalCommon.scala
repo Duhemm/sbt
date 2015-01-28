@@ -68,8 +68,6 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
       apiChanges foreach {
         case APIChangeDueToMacroDefinition(src) =>
           log.debug(s"Public API is considered to be changed because $src contains a macro definition.")
-        case RecompiledWithoutAPIChanges(src) =>
-          log.debug(s"$src has been recompiled and its API has not changed.")
         case apiChange @ (_: SourceAPIChange[T] | _: NamesChange[T]) =>
           val src = apiChange.modified
           val oldApi = oldAPIMapping(src)
@@ -126,45 +124,87 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
     case (co1, co2) => co1.sourceDirectory == co2.sourceDirectory && co1.outputDirectory == co2.outputDirectory
   }
 
+  /**
+   * Determines whether any of the transitive dependencies of `base` have been recompiled
+   * since the last compilation of `base`. Both internal and external dependencies are
+   * considered.
+   */
+  private def hasRecompiledDependency(entry: String => Option[File], forEntry: File => Option[Analysis], previousAnalysis: Analysis, base: File, maxDepth: Int = 5): Boolean = {
+    val getAnalysis = analysisForClass(entry, forEntry)
+    val baseCompilationTime = previousAnalysis.apis.internalAPI(base).compilation.startTime
+    def recompiledDependency(dep: Source) = dep.compilation.startTime > baseCompilationTime
+    def formatPath(path: List[File]) = path.reverse map (_.getName) mkString (" -> ")
+
+    def hasRecompiledDependency(currentAnalysis: Analysis, path: List[File], depth: Int = 0): Boolean = {
+      val continue = depth < maxDepth
+
+      def hasInternalChange = currentAnalysis.relations.internalSrcDeps(path.head).foldLeft(false) {
+        case (false, dep) if path contains dep => false
+        case (false, dep) =>
+          val source = currentAnalysis.apis.internalAPI(dep)
+          if (recompiledDependency(source)) {
+            log.debug(s"$dep has been recompiled: ${base.getName} has recompiled dependencies.")
+            log.debug(formatPath(dep :: path))
+            true
+          } else continue && hasRecompiledDependency(currentAnalysis, dep :: path, depth + 1)
+
+        case (true, _) => true
+      }
+
+      def hasExternalChange = currentAnalysis.relations.externalDeps(path.head).foldLeft(false) {
+        case (false, dep) if path contains dep => false
+        case (false, dep) =>
+          val analysis = getAnalysis(dep)
+          val correspondingFile = analysis.relations.definesClass(dep).head
+          val sourceBefore = analysis.apis.internalAPI(correspondingFile)
+          if (recompiledDependency(sourceBefore)) {
+            log.debug(s"$dep has been recompiled: ${base.getName} has recompiled dependencies.")
+            log.debug(formatPath(correspondingFile :: path))
+            true
+          } else continue && hasRecompiledDependency(analysis, correspondingFile :: path, depth + 1)
+
+        case (true, _) => true
+      }
+
+      hasInternalChange || hasExternalChange
+    }
+
+    log.debug(s"Checking if any of the transitive dependencies of $base has changed since its last compilation.")
+    hasRecompiledDependency(previousAnalysis, base :: Nil)
+  }
+
   def changedInitial(entry: String => Option[File], sources: Set[File], previousAnalysis: Analysis, current: ReadStamps,
     forEntry: File => Option[Analysis])(implicit equivS: Equiv[Stamp]): InitialChanges =
     {
       val previous = previousAnalysis.stamps
       val previousAPIs = previousAnalysis.apis
+      val previousRelations = previousAnalysis.relations
 
       val srcChanges = changes(previous.allInternalSources.toSet, sources, f => !equivS.equiv(previous.internalSource(f), current.internalSource(f)))
       val removedProducts = previous.allProducts.filter(p => !equivS.equiv(previous.product(p), current.product(p))).toSet
       val binaryDepChanges = previous.allBinaries.filter(externalBinaryModified(entry, forEntry, previous, current)).toSet
       val extChanges = changedIncremental(previousAPIs.allExternals, previousAPIs.externalAPI _, currentExternalAPI(entry, forEntry))
 
-      // We have collected all the changes that were visible. However, if macros are involved,
-      // we may need to issue more APIChanges or specify that more internal source files have been changed.
-
-      val completeExternalChanges = extChanges.apiChanges.foldLeft(List[APIChange[String]]()) {
-
-        case (acc, orig @ RecompiledWithoutAPIChanges(src)) =>
-          val analysis = analysisForClass(entry, forEntry)(src)
-          val correspondingFile = analysis.relations.definesClass(src)
-          val transitive = transitiveDependencies(analysis.relations.usesInternalSrc, correspondingFile).toList flatMap (analysis.relations.classNames)
-          orig :: (transitive map RecompiledWithoutAPIChanges[String]) ::: acc
-
-        case (acc, other) => other :: acc
+      // We have to check for all changes that could affect macro providers, but we cannot rely only on API changes
+      // like we usually do, because (for instance) a change to the implementation of a method could affect the result
+      // of a macro expansion in a way that we cannot predict. Therefore we stay on the safe side and recompile all macro
+      // providers that have one of their transitive dependencies modified.
+      val invalidatedMacroProviders = {
+        val macroRelation = previousRelations.fromMacroImpl
+        val macroProviders = macroRelation.internal._1s union macroRelation.external._1s
+        val immediatelyInvalidated = macroProviders intersect transitiveDependencies(previousRelations.usesInternalSrc, srcChanges.changed)
+        macroProviders filter (m => (immediatelyInvalidated contains m) || hasRecompiledDependency(entry, forEntry, previousAnalysis, m))
       }
 
-      val newSrcChanges = {
-        val externalModified = completeExternalChanges map (_.modified)
-        val usesModified = externalModified flatMap (previousAnalysis.relations.usesExternal)
-        val impactedByChanges = transitiveDeps(srcChanges.changed union usesModified.toSet)(previousAnalysis.relations.usesInternalSrc)
-
-        new Changes[File] {
-          val removed = srcChanges.removed
-          val added = srcChanges.added
-          val changed = impactedByChanges
-          val unmodified = srcChanges.unmodified -- impactedByChanges
-        }
+      // Create a new `Changes` taking in account the invalidated macro providers.
+      val completeSrcChange = new Changes[File] {
+        val removed = srcChanges.removed
+        val added = srcChanges.added
+        val changed = srcChanges.changed ++ invalidatedMacroProviders
+        val unmodified = srcChanges.unmodified -- invalidatedMacroProviders
       }
 
-      InitialChanges(newSrcChanges, removedProducts, binaryDepChanges, new APIChanges(completeExternalChanges))
+      InitialChanges(completeSrcChange, removedProducts, binaryDepChanges, extChanges)
     }
 
   def changes(previous: Set[File], current: Set[File], existingModified: File => Boolean): Changes[File] =

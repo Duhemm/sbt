@@ -22,7 +22,7 @@ private final class IncrementalNameHashing(log: Logger, options: IncOptions) ext
 
   override protected def sameAPI[T](src: T, a: Source, b: Source): Option[APIChange[T]] = {
     if (SameAPI(a, b))
-      Some(RecompiledWithoutAPIChanges(src))
+      None
     else {
       val aNameHashes = a._internalOnly_nameHashes
       val bNameHashes = b._internalOnly_nameHashes
@@ -33,57 +33,31 @@ private final class IncrementalNameHashing(log: Logger, options: IncOptions) ext
   }
 
   /** Invalidates sources based on initially detected 'changes' to the sources, products, and dependencies.*/
-  override protected def invalidateByExternal(relations: Relations, externalAPIChange: APIChange[String]): Set[File] = externalAPIChange match {
-    case RecompiledWithoutAPIChanges(modified) =>
-      val invalidationReason = memberRefInvalidator.invalidationReason(externalAPIChange)
-      log.debug(s"$invalidationReason\nAll macro providers that depend on $modified will be invalidated.")
+  override protected def invalidateByExternal(relations: Relations, externalAPIChange: APIChange[String]): Set[File] = {
+    val modified = externalAPIChange.modified
+    val invalidationReason = memberRefInvalidator.invalidationReason(externalAPIChange)
+    log.debug(s"$invalidationReason\nAll member reference dependencies will be considered within this context.")
+    // Propagate inheritance dependencies transitively.
+    // This differs from normal because we need the initial crossing from externals to sources in this project.
+    val externalInheritanceR = relations.inheritance.external
+    val byExternalInheritance = externalInheritanceR.reverse(modified)
+    log.debug(s"Files invalidated by inheriting from (external) $modified: $byExternalInheritance; now invalidating by inheritance (internally).")
+    val transitiveInheritance = byExternalInheritance flatMap { file =>
+      invalidateByInheritance(relations, file)
+    }
+    val memberRefInvalidationInternal = memberRefInvalidator.get(relations.memberRef.internal,
+      relations.names, externalAPIChange)
+    val memberRefInvalidationExternal = memberRefInvalidator.get(relations.memberRef.external,
+      relations.names, externalAPIChange)
 
-      val dependOnModified = relations.usesExternal(modified)
-      val impactedMacroProviders = invalidateMacroProvidersFrom(relations, dependOnModified)
-      log.debug(s"Invalidated macro providers because of a recompiled dependency: $impactedMacroProviders")
-
-      impactedMacroProviders
-
-    case _ =>
-      val modified = externalAPIChange.modified
-      val invalidationReason = memberRefInvalidator.invalidationReason(externalAPIChange)
-      log.debug(s"$invalidationReason\nAll member reference dependencies will be considered within this context.")
-      // Propagate inheritance dependencies transitively.
-      // This differs from normal because we need the initial crossing from externals to sources in this project.
-      val externalInheritanceR = relations.inheritance.external
-      val byExternalInheritance = externalInheritanceR.reverse(modified)
-      log.debug(s"Files invalidated by inheriting from (external) $modified: $byExternalInheritance; now invalidating by inheritance (internally).")
-      val transitiveInheritance = byExternalInheritance flatMap { file =>
-        invalidateByInheritance(relations, file)
-      }
-      val memberRefInvalidationInternal = memberRefInvalidator.get(relations.memberRef.internal,
-        relations.names, externalAPIChange)
-      val memberRefInvalidationExternal = memberRefInvalidator.get(relations.memberRef.external,
-        relations.names, externalAPIChange)
-
-      // Get the member reference dependencies of all sources transitively invalidated by inheritance
-      log.debug("Getting direct dependencies of all sources transitively invalidated by inheritance.")
-      val memberRefA = transitiveInheritance flatMap memberRefInvalidationInternal
-      // Get the sources that depend on externals by member reference.
-      // This includes non-inheritance dependencies and is not transitive.
-      log.debug(s"Getting sources that directly depend on (external) $modified.")
-      val memberRefB = memberRefInvalidationExternal(modified)
-
-      // Given an external API change, let's see what are all the files that are potentially affected in this subproject
-      // The macro implementations that depend on any of these files should be recompiled.
-      val impactedMacroProviders = invalidateMacroProvidersFrom(relations, relations.usesExternal(modified))
-      if (impactedMacroProviders.nonEmpty) {
-        log.debug(s"Invalidated macro provider because of external APIChange: $impactedMacroProviders")
-      }
-
-      transitiveInheritance ++ memberRefA ++ memberRefB ++ impactedMacroProviders
-  }
-
-  private def invalidateMacroProvidersFrom(relations: Relations, modified: Set[File]): Set[File] = {
-    val allImpacted = transitiveDeps(modified)(relations.usesInternalSrc)
-    val allProviders = relations.fromMacroImpl.internal._1s union relations.fromMacroImpl.external._1s
-
-    allImpacted intersect allProviders
+    // Get the member reference dependencies of all sources transitively invalidated by inheritance
+    log.debug("Getting direct dependencies of all sources transitively invalidated by inheritance.")
+    val memberRefA = transitiveInheritance flatMap memberRefInvalidationInternal
+    // Get the sources that depend on externals by member reference.
+    // This includes non-inheritance dependencies and is not transitive.
+    log.debug(s"Getting sources that directly depend on (external) $modified.")
+    val memberRefB = memberRefInvalidationExternal(modified)
+    transitiveInheritance ++ memberRefA ++ memberRefB
   }
 
   private def invalidateByInheritance(relations: Relations, modified: File): Set[File] = {
