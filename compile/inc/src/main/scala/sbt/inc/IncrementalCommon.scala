@@ -129,14 +129,14 @@ private[inc] abstract class IncrementalCommon(log: Logger, options: IncOptions) 
    * since the last compilation of `base`. Both internal and external dependencies are
    * considered.
    */
-  private def hasRecompiledDependency(entry: String => Option[File], forEntry: File => Option[Analysis], previousAnalysis: Analysis, base: File, maxDepth: Int = 5): Boolean = {
+  private def hasRecompiledDependency(entry: String => Option[File], forEntry: File => Option[Analysis], previousAnalysis: Analysis, base: File): Boolean = {
     val getAnalysis = analysisForClass(entry, forEntry)
     val baseCompilationTime = previousAnalysis.apis.internalAPI(base).compilation.startTime
     def recompiledDependency(dep: Source) = dep.compilation.startTime > baseCompilationTime
     def formatPath(path: List[File]) = path.reverse map (_.getName) mkString (" -> ")
 
     def hasRecompiledDependency(currentAnalysis: Analysis, path: List[File], depth: Int = 0): Boolean = {
-      val continue = depth < maxDepth
+      val continue = depth < options.macroTransitiveMaxDepth
 
       def hasInternalChange = currentAnalysis.relations.internalSrcDeps(path.head).foldLeft(false) {
         case (false, dep) if path contains dep => false
