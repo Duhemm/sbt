@@ -23,6 +23,26 @@ object ComponentCompiler {
         componentCompiler(compilerInterfaceID)
       }
   }
+
+  /**
+   * Generates a sequence of version of numbers, from more to less specific from `fullVersion`.
+   * `fullVersion` is expected to match Scala's versioning scheme (maj.min.rev[-XXX]).
+   */
+  private[sbt] def cascadingSourceModuleVersions(fullVersion: String): Seq[String] = {
+    val VersionParts = """(\d+)\.(\d+)\.(\d+)(?:-(.+?))?""".r
+
+    fullVersion match {
+      case VersionParts(major, minor, revision, null) =>
+        Seq(s"$major.$minor.$revision", s"$major.$minor")
+      case VersionParts(major, minor, revision, rest) =>
+        Seq(s"$major.$minor.$revision-$rest", s"$major.$minor.$revision", s"$major.$minor")
+      case unrecognized =>
+        // If we cannot recognize the version of the scala instance, then we will try to find
+        // a perfect match for the compiler interface, or fallback to the default sources.
+        Seq(unrecognized)
+    }
+
+  }
 }
 /**
  * This class provides source components compiled with the provided RawCompiler.
@@ -58,9 +78,20 @@ class ComponentCompiler(compiler: RawCompiler, manager: ComponentManager) {
   protected def compileAndInstall(id: String, binID: String) {
     val srcID = id + srcExtension
     IO.withTemporaryDirectory { binaryDirectory =>
+      def interfaceSources(moduleVersions: Seq[String]): Iterable[File] =
+        moduleVersions match {
+          case Seq() =>
+            manager.log.debug(s"Fetching default sources: $srcID")
+            manager.files(srcID)(IfMissing.Fail)
+          case version +: rest =>
+            manager.log.debug(s"Fetching version-specific sources: ${srcID}_$version")
+            manager.files(srcID + "_" + version)(new IfMissing.Fallback(interfaceSources(rest)))
+        }
       val targetJar = new File(binaryDirectory, id + ".jar")
       val xsbtiJars = manager.files(xsbtiID)(IfMissing.Fail)
-      AnalyzingCompiler.compileSources(manager.files(srcID)(IfMissing.Fail), targetJar, xsbtiJars, id, compiler, manager.log)
+
+      val sourceModuleVersions = cascadingSourceModuleVersions(compiler.scalaInstance.actualVersion)
+      AnalyzingCompiler.compileSources(interfaceSources(sourceModuleVersions), targetJar, xsbtiJars, id, compiler, manager.log)
       manager.define(binID, Seq(targetJar))
     }
   }
