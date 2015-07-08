@@ -50,6 +50,14 @@ object Dependencies {
   val guava = "com.google.guava" % "guava" % "18.0"
   val javaxInject = "javax.inject" % "javax.inject" % "1"
 
+  val compilerBridge = Def.setting { "org.scala-sbt" %% "compiler-bridge" % version.value cross CrossVersion.full }
+  val io = Def.setting { "org.scala-sbt" %% "io" % version.value cross CrossVersion.full }
+  val control = Def.setting { "org.scala-sbt" %% "control" % version.value cross CrossVersion.full }
+  val log = Def.setting { "org.scala-sbt" %% "logging" % version.value cross CrossVersion.full }
+  val process = Def.setting { "org.scala-sbt" %% "process" % version.value cross CrossVersion.full }
+  val api = Def.setting { "org.scala-sbt" %% "api" % version.value cross CrossVersion.full }
+  val interface = Def.setting { "org.scala-sbt" %% "interface" % version.value cross CrossVersion.full }
+
   //val sisuGuice = ("org.eclipse.sisu" % "sisu-guice" % "3.1.0").classifier("no_aop").exclude("javax.enterprise", "cdi-api", )
 
   /*
