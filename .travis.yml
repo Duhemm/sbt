@@ -43,6 +43,7 @@ notifications:
     - joshua.suereth@typesafe.com
 
 script:
+  - git clone https://github.com/Duhemm/compiler-bridge.git compiler-bridge && cd compiler-bridge && sbt +publishLocal && cd ..
   - sbt -J-XX:ReservedCodeCacheSize=128m "$SCRIPTED_TEST"
 
   # Tricks to avoid unnecessary cache updates
