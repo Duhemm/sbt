@@ -83,8 +83,8 @@ object Compiler {
   def scalaCompiler(instance: ScalaInstance, cpOptions: ClasspathOptions)(implicit app: AppConfiguration, log: Logger): AnalyzingCompiler =
     {
       val launcher = app.provider.scalaProvider.launcher
-      val componentManager = new ComponentManager(launcher.globalLock, app.provider.components, Option(launcher.ivyHome), log)
-      val provider = ComponentCompiler.interfaceProvider(componentManager)
+      val ivyConfiguration = IvyConfiguration(new IvyPaths(app.baseDirectory, Some(launcher.ivyHome)), Some(launcher.globalLock), false, Nil, log)
+      val provider = ComponentCompiler.interfaceProvider(ivyConfiguration)
       new AnalyzingCompiler(instance, provider, cpOptions)
     }
 
