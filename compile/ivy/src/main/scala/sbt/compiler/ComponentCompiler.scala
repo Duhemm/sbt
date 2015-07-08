@@ -26,22 +26,19 @@ object ComponentCompiler {
 
   /**
    * Generates a sequence of version of numbers, from more to less specific from `fullVersion`.
-   * `fullVersion` is expected to match Scala's versioning scheme (maj.min.rev[-XXX]).
    */
   private[sbt] def cascadingSourceModuleVersions(fullVersion: String): Seq[String] = {
-    val VersionParts = """(\d+)\.(\d+)\.(\d+)(?:-(.+?))?""".r
 
-    fullVersion match {
-      case VersionParts(major, minor, revision, null) =>
-        Seq(s"$major.$minor.$revision", s"$major.$minor")
-      case VersionParts(major, minor, revision, rest) =>
-        Seq(s"$major.$minor.$revision-$rest", s"$major.$minor.$revision", s"$major.$minor")
-      case unrecognized =>
-        // If we cannot recognize the version of the scala instance, then we will try to find
-        // a perfect match for the compiler interface, or fallback to the default sources.
-        Seq(unrecognized)
+    scala.util.Try {
+      val VersionNumber(numbers @ maj +: min +: _, tags, _) = VersionNumber(fullVersion)
+      Seq(fullVersion,
+        numbers.mkString(".") + (if (tags.nonEmpty) tags.mkString("-", "-", "") else ""),
+        numbers.mkString("."),
+        s"$maj.$min"
+      ).distinct
+    } getOrElse {
+      Seq(fullVersion)
     }
-
   }
 }
 /**
