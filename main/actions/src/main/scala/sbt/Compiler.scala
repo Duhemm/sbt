@@ -54,6 +54,21 @@ object Compiler {
   def compilers(instance: ScalaInstance, cpOptions: ClasspathOptions)(implicit app: AppConfiguration, log: Logger): Compilers =
     compilers(instance, cpOptions, None)
 
+  def compilers(instance: ScalaInstance, cpOptions: ClasspathOptions, javaHome: Option[File], ivyConfiguration: IvyConfiguration)(implicit app: AppConfiguration, log: Logger): Compilers =
+    {
+      val javac =
+        AggressiveCompile.directOrFork(instance, cpOptions, javaHome)
+      val javac2 =
+        JavaTools.directOrFork(instance, cpOptions, javaHome)
+      // Hackery to enable both the new and deprecated APIs to coexist peacefully.
+      case class CheaterJavaTool(newJavac: IncrementalCompilerJavaTools, delegate: JavaTool) extends JavaTool with JavaToolWithNewInterface {
+        def compile(contract: JavacContract, sources: Seq[File], classpath: Seq[File], outputDirectory: File, options: Seq[String])(implicit log: Logger): Unit =
+          javac.compile(contract, sources, classpath, outputDirectory, options)(log)
+        def onArgs(f: Seq[String] => Unit): JavaTool = CheaterJavaTool(newJavac, delegate.onArgs(f))
+      }
+      compilers(instance, cpOptions, CheaterJavaTool(javac2, javac), ivyConfiguration)
+    }
+
   def compilers(instance: ScalaInstance, cpOptions: ClasspathOptions, javaHome: Option[File])(implicit app: AppConfiguration, log: Logger): Compilers =
     {
       val javac =
@@ -80,10 +95,21 @@ object Compiler {
       val scalac = scalaCompiler(instance, cpOptions)
       new Compilers(scalac, javac)
     }
+  def compilers(instance: ScalaInstance, cpOptions: ClasspathOptions, javac: JavaTool, ivyConfiguration: IvyConfiguration)(implicit app: AppConfiguration, log: Logger): Compilers =
+    {
+      val scalac = scalaCompiler(instance, cpOptions, ivyConfiguration)
+      new Compilers(scalac, javac)
+    }
+  @deprecated("Please provide an IvyConfiguration")
   def scalaCompiler(instance: ScalaInstance, cpOptions: ClasspathOptions)(implicit app: AppConfiguration, log: Logger): AnalyzingCompiler =
     {
       val launcher = app.provider.scalaProvider.launcher
       val ivyConfiguration = IvyConfiguration(new IvyPaths(app.baseDirectory, Some(launcher.ivyHome)), Some(launcher.globalLock), false, Nil, log)
+      val provider = ComponentCompiler.interfaceProvider(ivyConfiguration)
+      new AnalyzingCompiler(instance, provider, cpOptions)
+    }
+  def scalaCompiler(instance: ScalaInstance, cpOptions: ClasspathOptions, ivyConfiguration: IvyConfiguration)(implicit app: AppConfiguration, log: Logger): AnalyzingCompiler =
+    {
       val provider = ComponentCompiler.interfaceProvider(ivyConfiguration)
       new AnalyzingCompiler(instance, provider, cpOptions)
     }
