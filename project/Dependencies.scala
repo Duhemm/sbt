@@ -56,7 +56,7 @@ object Dependencies {
   val log = Def.setting { "org.scala-sbt" %% "logging" % version.value cross CrossVersion.full }
   val process = Def.setting { "org.scala-sbt" %% "process" % version.value cross CrossVersion.full }
   val api = Def.setting { "org.scala-sbt" %% "api" % version.value cross CrossVersion.full }
-  val interface = Def.setting { "org.scala-sbt" %% "interface" % version.value cross CrossVersion.full }
+  val interface = Def.setting { "org.scala-sbt" % "interface" % version.value cross CrossVersion.Disabled }
 
   //val sisuGuice = ("org.eclipse.sisu" % "sisu-guice" % "3.1.0").classifier("no_aop").exclude("javax.enterprise", "cdi-api", )
 
