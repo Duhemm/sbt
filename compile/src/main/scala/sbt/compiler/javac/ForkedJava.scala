@@ -20,6 +20,9 @@ object ForkedJava {
       val cwd = new File(new File(".").getAbsolutePath).getCanonicalFile
       val javacLogger = new JavacLogger(log, reporter, cwd)
       var exitCode = -1
+      log.debug(s"Attempting to launch new process '$exe'...")
+      log.debug(s"javac options: $options")
+
       try {
         exitCode = Process(exe +: forkArgs, cwd) ! javacLogger
       } finally {

@@ -62,7 +62,8 @@ final class LocalJavaCompiler(compiler: javax.tools.JavaCompiler) extends JavaCo
     import collection.JavaConverters._
     val logger = new LoggerWriter(log)
     val logWriter = new PrintWriter(logger)
-    log.debug("Attempting to call " + compiler + " directly...")
+    log.debug(s"Attempting to call $compiler directly...")
+    log.debug(s"javac options: $options")
     val diagnostics = new DiagnosticsReporter(reporter)
     val fileManager = compiler.getStandardFileManager(diagnostics, null, null)
     val jfiles = fileManager.getJavaFileObjectsFromFiles(sources.asJava)
