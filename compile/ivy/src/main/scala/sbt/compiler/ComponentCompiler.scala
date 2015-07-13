@@ -5,15 +5,16 @@ package sbt
 package compiler
 
 import java.io.File
+import scala.util.Try
 
 object ComponentCompiler {
   val xsbtiID = "xsbti"
   val srcExtension = "-src"
-  val binSeparator = "_"
+  val binSeparator = "-bin_"
   val compilerInterfaceID = "compiler-bridge"
   val compilerInterfaceSrcID = compilerInterfaceID + srcExtension
   val javaVersion = System.getProperty("java.class.version")
-  val sbtVersion = "0.13.9-SNAPSHOT"
+  val sbtVersion = "0.13.9-SNAPSHOT" // TODO: Shouldn't be hardcoded...
 
   def interfaceProvider(manager: ComponentManager): CompilerInterfaceProvider = new CompilerInterfaceProvider {
     def apply(scalaInstance: xsbti.compile.ScalaInstance, log: Logger): File =
@@ -100,42 +101,32 @@ private[compiler] class NewComponentCompiler(compiler: RawCompiler, manager: Com
 
   private val ivySbt: IvySbt = new IvySbt(ivyConfiguration)
 
-  def apply(id: String): File =
-    getPrecompiled(id) getOrElse getLocallyCompiled(id)
-
-  private def binaryID(id: String, withJavaVersion: Boolean): String = {
-    val base = id + binSeparator + compiler.scalaInstance.actualVersion
-    if (withJavaVersion) base + "__" + javaVersion else base
-  }
-
-  private def getPrecompiled(id: String): Option[File] = {
-    val binID = binaryID(id, false)
-    val binModule = getModule(binID)
-    val jarName = s"$binID-$sbtVersion.jar"
-    update(binModule) find (_.getName == jarName)
-  }
-
-  private def getLocallyCompiled(id: String): File = {
-    val binID = binaryID(id, true)
+  def apply(id: String): File = {
+    val binID = binaryID(id)
     manager.file(binID)(new IfMissing.Define(true, compileAndInstall(id, binID)))
+  }
+
+  private def binaryID(id: String): String = {
+    val base = id + binSeparator + compiler.scalaInstance.actualVersion
+    base + "__" + javaVersion
   }
 
   private def compileAndInstall(id: String, binID: String): Unit = {
     val srcID = id + srcExtension
-    IO.withTemporaryDirectory { binaryDirectory =>
-      def interfaceSources(moduleVersions: Seq[String]): File =
-        moduleVersions match {
-          case Seq() =>
-            log.debug(s"Fetching default sources: $id")
-            val jarName = s"$srcID-$sbtVersion.jar"
-            update(getModule(id)) find (_.getName == jarName) getOrElse (throw new InvalidComponent(s"Couldn't retrieve default sources: file '$jarName' in module '$id'"))
+    def interfaceSources(moduleVersions: Seq[String]): File =
+      moduleVersions match {
+        case Seq() =>
+          log.debug(s"Fetching default sources: $id")
+          val jarName = s"$srcID-$sbtVersion.jar"
+          update(getModule(id))(_.getName == jarName) getOrElse (throw new InvalidComponent(s"Couldn't retrieve default sources: file '$jarName' in module '$id'"))
 
-          case version +: rest =>
-            log.debug(s"Fetching version-specific sources: ${id}_$version")
-            val moduleName = s"${id}_$version"
-            val jarName = s"${srcID}_$version-$sbtVersion.jar"
-            update(getModule(moduleName)) find (_.getName == jarName) getOrElse interfaceSources(rest)
-        }
+        case version +: rest =>
+          log.debug(s"Fetching version-specific sources: ${id}_$version")
+          val moduleName = s"${id}_$version"
+          val jarName = s"${srcID}_$version-$sbtVersion.jar"
+          update(getModule(moduleName))(_.getName == jarName) getOrElse interfaceSources(rest)
+      }
+    IO.withTemporaryDirectory { binaryDirectory =>
 
       val targetJar = new File(binaryDirectory, s"$binID.jar")
       val xsbtiJars = manager.files(xsbtiID)(IfMissing.Fail)
@@ -154,7 +145,7 @@ private[compiler] class NewComponentCompiler(compiler: RawCompiler, manager: Com
    * ivy implementation assumes that the root module is an sbt project, and thus doesn't download it.
    */
   private def getModule(id: String): ivySbt.Module = {
-    val dummyID = ModuleID(xsbti.ArtifactInfo.SbtOrganization, "sbt", sbtVersion, Some("component"))
+    val dummyID = ModuleID(xsbti.ArtifactInfo.SbtOrganization, scala.util.Random.alphanumeric take 20 mkString "", sbtVersion, Some("component"))
     val moduleID = ModuleID(xsbti.ArtifactInfo.SbtOrganization, id, sbtVersion, Some("component"))
     getModule(dummyID, Seq(moduleID))
   }
@@ -170,23 +161,38 @@ private[compiler] class NewComponentCompiler(compiler: RawCompiler, manager: Com
     new ivySbt.Module(moduleSetting)
   }
 
-  private def update(module: ivySbt.Module): Seq[File] = {
+  private def dependenciesNames(module: ivySbt.Module): String = module.moduleSettings match {
+    // `module` is a dummy module, we will only fetch its dependencies.
+    case ic: InlineConfiguration =>
+      ic.dependencies map {
+        case mID: ModuleID =>
+          import mID._
+          s"$organization % $name % $revision"
+      } mkString ", "
+    case _ =>
+      s"unknown"
+  }
+
+  private def update(module: ivySbt.Module)(predicate: File => Boolean): Option[File] = {
 
     val retrieveDirectory = new File(ivyConfiguration.baseDirectory, "component")
     val retrieveConfiguration = new RetrieveConfiguration(retrieveDirectory, Resolver.defaultRetrievePattern, false)
     val updateConfiguration = new UpdateConfiguration(Some(retrieveConfiguration), true, UpdateLogging.DownloadOnly)
 
+    log.info(s"Attempting to fetch ${dependenciesNames(module)}. This operation may fail.")
     IvyActions.updateEither(module, updateConfiguration, UnresolvedWarningConfiguration(), LogicalClock.unknown, None, log) match {
       case Left(unresolvedWarning) =>
-        ???
+        None
 
       case Right(updateReport) =>
-
-        for {
-          conf <- updateReport.configurations
-          m <- conf.modules
-          (_, f) <- m.artifacts
-        } yield f
+        val files =
+          for {
+            conf <- updateReport.configurations
+            m <- conf.modules
+            (_, f) <- m.artifacts
+            if predicate(f)
+          } yield f
+        files.headOption
 
     }
   }
