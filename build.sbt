@@ -96,13 +96,7 @@ lazy val interfaceProj = (project in file("interface")).
     componentID := Some("xsbti"),
     watchSources <++= apiDefinitions,
     resourceGenerators in Compile <+= (version, resourceManaged, streams, compile in Compile) map generateVersionFile,
-    apiDefinitions <<= baseDirectory map { base => (base / "definition") :: (base / "other") :: (base / "type") :: Nil },
-    sourceGenerators in Compile <+= (apiDefinitions,
-      fullClasspath in Compile in datatypeProj,
-      sourceManaged in Compile,
-      mainClass in datatypeProj in Compile,
-      runner,
-      streams) map generateAPICached
+    apiDefinitions <<= baseDirectory map { base => (base / "definition") :: (base / "other") :: (base / "type") :: Nil }
   )
 
 // defines operations on the API of a source, including determining whether it has changed and converting it to a string
@@ -204,14 +198,6 @@ lazy val classfileProj = (project in utilPath / "classfile").
   settings(
     testedBaseSettings,
     name := "Classfile"
-  )
-
-// generates immutable or mutable Java data types according to a simple input format
-lazy val datatypeProj = (project in utilPath / "datatype").
-  dependsOn(ioProj).
-  settings(
-    baseSettings,
-    name := "Datatype Generator"
   )
 
 // cross versioning
@@ -463,7 +449,7 @@ lazy val myProvided = config("provided") intransitive
 
 def allProjects = Seq(interfaceProj, apiProj,
   controlProj, collectionProj, applyMacroProj, processProj, ioProj, classpathProj, completeProj,
-  logProj, relationProj, classfileProj, datatypeProj, crossProj, logicProj, ivyProj,
+  logProj, relationProj, classfileProj, crossProj, logicProj, ivyProj,
   testingProj, testAgentProj, taskProj, stdTaskProj, cacheProj, trackingProj, runProj,
   compileInterfaceProj, compileIncrementalProj, compilePersistProj, compilerProj,
   compilerIntegrationProj, compilerIvyProj,
@@ -537,7 +523,7 @@ lazy val otherProjects: ScopeFilter = ScopeFilter(
     applyMacroProj,
     // processProj, // this one is suspicious
     ioProj,
-    relationProj, classfileProj, datatypeProj,
+    relationProj, classfileProj,
     crossProj, logicProj, testingProj, testAgentProj, taskProj,
     cacheProj, trackingProj,
     compileIncrementalProj,
