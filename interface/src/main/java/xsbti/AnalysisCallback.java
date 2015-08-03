@@ -3,6 +3,8 @@
  */
 package xsbti;
 
+import xsbti.newcompiler.Analysis;
+
 import java.io.File;
 
 public interface AnalysisCallback
@@ -59,4 +61,6 @@ public interface AnalysisCallback
 	 *       Do not depend on it, please.
 	 */
 	boolean nameHashing();
+
+	Analysis get();
 }
