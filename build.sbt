@@ -90,7 +90,7 @@ lazy val interfaceProj = (project in file("interface")).
   dependsOn(relationProj).
   settings(
     minimalSettings,
-    javaOnlySettings,
+    //javaOnlySettings,
     name := "Interface",
     projectComponent,
     exportJars := true,

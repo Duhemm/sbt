@@ -3,7 +3,7 @@
  */
 package xsbti;
 
-import xsbti.newcompiler.Analysis;
+import sbt.incrementalcompiler.Analysis;
 
 import java.io.File;
 
@@ -62,5 +62,5 @@ public interface AnalysisCallback
 	 */
 	boolean nameHashing();
 
-	Analysis get();
+//	Analysis get();
 }
