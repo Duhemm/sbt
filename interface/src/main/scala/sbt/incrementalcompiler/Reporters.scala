@@ -1,6 +1,6 @@
 package sbt.incrementalcompiler
 
-import xsbti.{ Logger, Reporter }
+import xsbti.Logger
 
 /**
  * Set of objects to which events should be reported.
