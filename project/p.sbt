@@ -17,4 +17,4 @@ addSbtPlugin("com.typesafe.sbt" % "sbt-javaversioncheck" % "0.1.0")
 
 addSbtPlugin("com.eed3si9n" % "sbt-doge" % "0.1.3")
 
-addSbtPlugin("org.scala-sbt" % "datatype-plugin" % "0.1.0-SNAPSHOT")
+addSbtPlugin("org.scala-sbt" % "datatype-plugin" % "0.0.1")
