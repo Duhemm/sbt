@@ -66,7 +66,7 @@ object StandardMain {
       val (earlyCommands, normalCommands) = (preCommands ++ userCommands).partition(isEarlyCommand)
       val commands = earlyCommands ++ normalCommands
       val initAttrs = BuiltinCommands.initialAttributes
-      val s = State(configuration, initialDefinitions, Set.empty, None, commands, State.newHistory, initAttrs, initialGlobalLogging, State.Continue)
+      val s = State(configuration, initialDefinitions, Set.empty, None, commands, State.newHistory, initAttrs, initialGlobalLogging, State.Continue, Nil)
       s.initializeClassLoaderCache
     }
 }

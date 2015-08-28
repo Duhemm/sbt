@@ -315,7 +315,7 @@ object Project extends ProjectExtra {
       val unloaded = runUnloadHooks(s)
       val (onLoad, onUnload) = getHooks(structure.data)
       val newAttrs = unloaded.attributes.put(stateBuildStructure, structure).put(sessionSettings, session).put(Keys.onUnload.key, onUnload)
-      val newState = unloaded.copy(attributes = newAttrs)
+      val newState = unloaded.copy(attributes = newAttrs).copy(projects = structure.allProjects)
       onLoad(LogManager.setGlobalLogLevels(updateCurrent(newState), structure.data))
     }
 
