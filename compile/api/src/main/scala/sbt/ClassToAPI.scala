@@ -73,9 +73,8 @@ object ClassToAPI {
 
   /** Returns the (static structure, instance structure, inherited classes) for `c`. */
   def structure(c: Class[_], enclPkg: Option[String], cmap: ClassMap): (api.Structure, api.Structure) = {
-    lazy val cf = classFileForClass(c)
     val methods = mergeMap(c, c.getDeclaredMethods, c.getMethods, methodToDef(enclPkg))
-    val fields = mergeMap(c, c.getDeclaredFields, c.getFields, fieldToDef(c, cf, enclPkg))
+    val fields = mergeMap(c, c.getDeclaredFields, c.getFields, fieldToDef(c, enclPkg))
     val constructors = mergeMap(c, c.getDeclaredConstructors, c.getConstructors, constructorToDef(enclPkg))
     val classes = merge[Class[_]](c, c.getDeclaredClasses, c.getClasses, toDefinitions(cmap), (_: Seq[Class[_]]).partition(isStatic), _.getEnclosingClass != c)
     val all = methods ++ fields ++ constructors ++ classes
@@ -89,9 +88,9 @@ object ClassToAPI {
   }
 
   /** TODO: over time, ClassToAPI should switch the majority of access to the classfile parser */
-  private[this] def classFileForClass(c: Class[_]): ClassFile = {
+  private[this] def classFileForClass(c: Class[_]): Option[ClassFile] = {
     val file = new java.io.File(IO.classLocationFile(c), s"${c.getName.replace('.', '/')}.class")
-    classfile.Parser.apply(file)
+    scala.util.Try { classfile.Parser.apply(file) }.toOption
   }
 
   private[this] def lzyS[T <: AnyRef](t: T): xsbti.api.Lazy[T] = lzy(t)
@@ -139,13 +138,13 @@ object ClassToAPI {
   def upperBounds(ts: Array[Type]): api.Type =
     new api.Structure(lzy(types(ts)), lzyEmptyDefArray, lzyEmptyDefArray)
 
-  @deprecated("Use fieldToDef[4] instead", "0.13.9")
+  @deprecated("Use fieldToDef[3] instead", "0.13.9")
   def fieldToDef(enclPkg: Option[String])(f: Field): api.FieldLike = {
     val c = f.getDeclaringClass()
-    fieldToDef(c, classFileForClass(c), enclPkg)(f)
+    fieldToDef(c, enclPkg)(f)
   }
 
-  def fieldToDef(c: Class[_], cf: => ClassFile, enclPkg: Option[String])(f: Field): api.FieldLike =
+  def fieldToDef(c: Class[_], enclPkg: Option[String])(f: Field): api.FieldLike =
     {
       val name = f.getName
       val accs = access(f.getModifiers, enclPkg)
@@ -155,14 +154,15 @@ object ClassToAPI {
       // generate a more specific type for constant fields
       val specificTpe: Option[api.Type] =
         if (mods.isFinal) {
-          try {
-            cf.constantValue(name).map(singletonForConstantField(c, f, _))
-          } catch {
-            case e: Throwable =>
-              throw new IllegalStateException(
-                s"Failed to parse $c: this may mean your classfiles are corrupted. Please clean and try again.",
-                e
-              )
+          classFileForClass(c) flatMap { cf =>
+            try cf.constantValue(name).map(singletonForConstantField(c, f, _))
+            catch {
+              case e: Throwable =>
+                throw new IllegalStateException(
+                  s"Failed to parse $c: this may mean your classfiles are corrupted. Please clean and try again.",
+                  e
+                )
+            }
           }
         } else {
           None
