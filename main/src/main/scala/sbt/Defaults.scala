@@ -10,7 +10,7 @@ import Scope.{ fillTaskAxis, GlobalScope, ThisScope }
 import sbt.Compiler.InputsWithPrevious
 import sbt.internal.librarymanagement.mavenint.{ PomExtraDependencyAttributes, SbtPomExtraProperties }
 import xsbt.api.Discovery
-import xsbti.compile.CompileOrder
+import xsbti.compile.{ CompileAnalysis, CompileOrder, CompileResult, IncOptionsUtil }
 import Project.{ inConfig, inScope, inTask, richInitialize, richInitializeTask, richTaskSessionVar }
 import Def.{ Initialize, ScopedKey, Setting, SettingsDefinition }
 import sbt.internal.librarymanagement.{ CustomPomParser, DependencyFilter }
@@ -20,7 +20,7 @@ import sbt.librarymanagement.Configurations.{ Compile, CompilerPlugin, Integrati
 import sbt.librarymanagement.CrossVersion.{ binarySbtVersion, binaryScalaVersion, partialVersion }
 import sbt.internal.util.complete._
 import std.TaskExtra._
-import sbt.internal.inc.{ Analysis, ClassfileManager, ClasspathOptions, CompilerCache, FileValueCache, IncOptions, Locate, LoggerReporter, MixedAnalyzingCompiler, ScalaInstance }
+import sbt.internal.inc.{ Analysis, ClassfileManager, ClasspathOptions, CompilerCache, FileValueCache, Locate, LoggerReporter, MixedAnalyzingCompiler, ScalaInstance }
 import testing.{ Framework, Runner, AnnotatedFingerprint, SubclassFingerprint }
 
 import sbt.librarymanagement._
@@ -58,13 +58,13 @@ object Defaults extends BuildCommon {
 
   def lock(app: xsbti.AppConfiguration): xsbti.GlobalLock = app.provider.scalaProvider.launcher.globalLock
 
-  def extractAnalysis[T](a: Attributed[T]): (T, Analysis) =
+  def extractAnalysis[T](a: Attributed[T]): (T, CompileAnalysis) =
     (a.data, a.metadata get Keys.analysis getOrElse Analysis.Empty)
 
-  def analysisMap[T](cp: Seq[Attributed[T]]): T => Option[Analysis] =
+  def analysisMap[T](cp: Seq[Attributed[T]]): T => Option[CompileAnalysis] =
     {
       val m = (for (a <- cp; an <- a.metadata get Keys.analysis) yield (a.data, an)).toMap
-      m.get _
+      m get _
     }
   private[sbt] def globalDefaults(ss: Seq[Setting[_]]): Seq[Setting[_]] = Def.defaultSettings(inScope(GlobalScope)(ss))
 
@@ -237,8 +237,7 @@ object Defaults extends BuildCommon {
   )
 
   def compileBase = inTask(console)(compilersSetting :: Nil) ++ compileBaseGlobal ++ Seq(
-    incOptions := incOptions.value.withNewClassfileManager(
-      ClassfileManager.transactional(crossTarget.value / "classes.bak", sbt.util.Logger.Null)),
+    incOptions := incOptions.value.withClassfileManagerType(xsbti.Maybe.just(new xsbti.compile.TransactionalManagerType(crossTarget.value / "classes.bak", sbt.util.Logger.Null))),
     scalaInstance <<= scalaInstanceTask,
     crossVersion := (if (crossPaths.value) CrossVersion.binary else CrossVersion.Disabled),
     crossTarget := makeCrossTarget(target.value, scalaBinaryVersion.value, sbtBinaryVersion.value, sbtPlugin.value, crossPaths.value),
@@ -250,7 +249,7 @@ object Defaults extends BuildCommon {
   )
   // must be a val: duplication detected by object identity
   private[this] lazy val compileBaseGlobal: Seq[Setting[_]] = globalDefaults(Seq(
-    incOptions := IncOptions.Default,
+    incOptions := IncOptionsUtil.defaultIncOptions,
     classpathOptions :== ClasspathOptions.boot,
     classpathOptions in console :== ClasspathOptions.repl,
     compileOrder :== CompileOrder.Mixed,
@@ -326,7 +325,7 @@ object Defaults extends BuildCommon {
     val configurations = Project.getProject(ref, structure).toList.flatMap(_.configurations)
     configurations.flatMap { conf =>
       key in (ref, conf) get structure.data
-    } join
+    }.join
   }
   def watchTransitiveSourcesTask: Initialize[Task[Seq[File]]] = {
     import ScopeFilter.Make.{ inDependencies => inDeps, _ }
@@ -499,7 +498,7 @@ object Defaults extends BuildCommon {
         val succeeded = TestStatus.read(succeededFile(s.cacheDirectory))
         val stamps = collection.mutable.Map.empty[File, Long]
         def stamp(dep: String): Long = {
-          val stamps = for (a <- ans; f <- a.relations.definesClass(dep)) yield intlStamp(f, a, Set.empty)
+          val stamps = for (a <- ans map { case a: Analysis => a }; f <- a.relations.definesClass(dep)) yield intlStamp(f, a, Set.empty)
           if (stamps.isEmpty) Long.MinValue else stamps.max
         }
         def intlStamp(f: File, analysis: Analysis, s: Set[File]): Long = {
@@ -608,8 +607,9 @@ object Defaults extends BuildCommon {
         includeFilters.map { f => (s: String) => (f.accept(s) && !matches(excludeFilters, s)) }
       }
     }
-  def detectTests: Initialize[Task[Seq[TestDefinition]]] = (loadedTestFrameworks, compile, streams) map { (frameworkMap, analysis, s) =>
-    Tests.discover(frameworkMap.values.toList, analysis, s.log)._1
+  def detectTests: Initialize[Task[Seq[TestDefinition]]] = (loadedTestFrameworks, compile, streams) map {
+    case (frameworkMap, analysis: Analysis, s) =>
+      Tests.discover(frameworkMap.values.toList, analysis, s.log)._1
   }
   def defaultRestrictions: Initialize[Seq[Tags.Rule]] = parallelExecution { par =>
     val max = EvaluateTask.SystemProcessors
@@ -821,7 +821,7 @@ object Defaults extends BuildCommon {
   def mainRunTask = run <<= runTask(fullClasspath in Runtime, mainClass in run, runner in run)
   def mainRunMainTask = runMain <<= runMainTask(fullClasspath in Runtime, runner in run)
 
-  def discoverMainClasses(analysis: Analysis): Seq[String] =
+  def discoverMainClasses(analysis: CompileAnalysis): Seq[String] =
     Discovery.applications(Tests.allDefs(analysis)).collect({ case (definition, discovered) if discovered.hasMain => definition.name }).sorted
 
   def consoleProjectTask = (state, streams, initialCommands in consoleProject) map { (state, s, extra) => ConsoleProject(state, extra)(s.log); println() }
@@ -849,13 +849,14 @@ object Defaults extends BuildCommon {
   @deprecated("Use inTask(compile)(compileInputsSettings)", "0.13.0")
   def compileTaskSettings: Seq[Setting[_]] = inTask(compile)(compileInputsSettings)
 
-  def compileTask: Initialize[Task[Analysis]] = Def.task {
+  def compileTask: Initialize[Task[CompileAnalysis]] = Def.task {
     val setup: Compiler.IncSetup = compileIncSetup.value
     // TODO - expose bytecode manipulation phase.
-    val analysisResult: Compiler.CompileResult = manipulateBytecode.value
+    val analysisResult: CompileResult = manipulateBytecode.value
     if (analysisResult.hasModified) {
       val store = MixedAnalyzingCompiler.staticCachedStore(setup.cacheFile)
-      store.set(analysisResult.analysis, analysisResult.setup)
+      val analysis = analysisResult.analysis match { case a: Analysis => a }
+      store.set(analysis, analysisResult.setup)
     }
     analysisResult.analysis
   }
@@ -863,7 +864,7 @@ object Defaults extends BuildCommon {
     // TODO - Should readAnalysis + saveAnalysis be scoped by the compile task too?
     compileIncrementalTaskImpl(streams.value, (compileInputs in compile).value, previousCompile.value, (compilerReporter in compile).value)
   }
-  private[this] def compileIncrementalTaskImpl(s: TaskStreams, ci: Compiler.Inputs, previous: Compiler.PreviousAnalysis, reporter: Option[xsbti.Reporter]): Compiler.CompileResult =
+  private[this] def compileIncrementalTaskImpl(s: TaskStreams, ci: Compiler.Inputs, previous: Compiler.PreviousAnalysis, reporter: Option[xsbti.Reporter]): CompileResult =
     {
       lazy val x = s.text(ExportStream)
       def onArgs(cs: Compiler.Compilers) = cs.copy(scalac = cs.scalac.onArgs(exported(x, "scalac")), javac = cs.javac /*.onArgs(exported(x, "javac"))*/ )
@@ -903,10 +904,11 @@ object Defaults extends BuildCommon {
   )
 
   def printWarningsTask: Initialize[Task[Unit]] =
-    (streams, compile, maxErrors, sourcePositionMappers) map { (s, analysis, max, spms) =>
-      val problems = analysis.infos.allInfos.values.flatMap(i => i.reportedProblems ++ i.unreportedProblems)
-      val reporter = new LoggerReporter(max, s.log, Compiler.foldMappers(spms))
-      problems foreach { p => reporter.display(p.position, p.message, p.severity) }
+    (streams, compile, maxErrors, sourcePositionMappers) map {
+      case (s, analysis: Analysis, max, spms) =>
+        val problems = analysis.infos.allInfos.values.flatMap(i => i.reportedProblems ++ i.unreportedProblems)
+        val reporter = new LoggerReporter(max, s.log, Compiler.foldMappers(spms))
+        problems foreach { p => reporter.display(p.position, p.message, p.severity) }
     }
 
   def sbtPluginExtra(m: ModuleID, sbtV: String, scalaV: String): ModuleID =
@@ -921,7 +923,9 @@ object Defaults extends BuildCommon {
   }
 
   @deprecated("Use discoverSbtPluginNames.", "0.13.2")
-  def discoverPlugins: Initialize[Task[Set[String]]] = (compile, sbtPlugin, streams) map { (analysis, isPlugin, s) => if (isPlugin) discoverSbtPlugins(analysis, s.log) else Set.empty }
+  def discoverPlugins: Initialize[Task[Set[String]]] = (compile, sbtPlugin, streams) map {
+    case (analysis: Analysis, isPlugin, s) => if (isPlugin) discoverSbtPlugins(analysis, s.log) else Set.empty
+  }
 
   @deprecated("Use PluginDiscovery.sourceModuleNames[Plugin].", "0.13.2")
   def discoverSbtPlugins(analysis: Analysis, log: Logger): Set[String] =
@@ -1571,7 +1575,7 @@ object Classpaths {
       new RawRepository(new ProjectResolver(ProjectResolver.InterProject, m))
     }
 
-  def analyzed[T](data: T, analysis: Analysis) = Attributed.blank(data).put(Keys.analysis, analysis)
+  def analyzed[T](data: T, analysis: CompileAnalysis) = Attributed.blank(data).put(Keys.analysis, analysis)
   def makeProducts: Initialize[Task[Seq[File]]] = Def.task {
     val x1 = compile.value
     val x2 = copyResources.value

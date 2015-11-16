@@ -4,11 +4,10 @@
 package sbt
 
 import sbt.internal.inc.javac.{ IncrementalCompilerJavaTools, JavaTools }
-import sbt.internal.inc.{ AnalyzingCompiler, ClasspathOptions, CompileSetup, CompileOutput, IC, JavaTool, LoggerReporter, ScalaInstance }
+import sbt.internal.inc.{ AnalyzingCompiler, ClasspathOptions, CompileOutput, IC, JavaTool, LoggerReporter, ScalaInstance }
 import xsbti.{ Logger => _, _ }
-import xsbti.compile.{ CompileOrder, GlobalsCache }
-import CompileOrder.{ JavaThenScala, Mixed, ScalaThenJava }
-import sbt.internal.inc.{ Analysis, ComponentCompiler, IncOptions, Locate }
+import xsbti.compile.{ CompileAnalysis, CompileOrder, CompileResult, GlobalsCache, IncOptions, MiniSetup }
+import sbt.internal.inc.{ Analysis, ComponentCompiler, Locate }
 import Locate.DefinesClass
 import java.io.File
 
@@ -35,7 +34,7 @@ object Compiler {
   /** The inputs for the copiler *and* the previous analysis of source dependecnies. */
   final case class InputsWithPrevious(inputs: Inputs, previousAnalysis: PreviousAnalysis)
   final case class Options(classpath: Seq[File], sources: Seq[File], classesDirectory: File, options: Seq[String], javacOptions: Seq[String], maxErrors: Int, sourcePositionMapper: Position => Position, order: CompileOrder)
-  final case class IncSetup(analysisMap: File => Option[Analysis], definesClass: DefinesClass, skip: Boolean, cacheFile: File, cache: GlobalsCache, incOptions: IncOptions)
+  final case class IncSetup(analysisMap: File => Option[CompileAnalysis], definesClass: DefinesClass, skip: Boolean, cacheFile: File, cache: GlobalsCache, incOptions: IncOptions)
   private[sbt] trait JavaToolWithNewInterface extends JavaTool {
     def newJavac: IncrementalCompilerJavaTools
   }
@@ -43,8 +42,7 @@ object Compiler {
   final case class Compilers(scalac: AnalyzingCompiler, javac: IncrementalCompilerJavaTools)
 
   /** The previous source dependency analysis result from compilation. */
-  final case class PreviousAnalysis(analysis: Analysis, setup: Option[CompileSetup])
-  type CompileResult = IC.Result
+  final case class PreviousAnalysis(analysis: Analysis, setup: Option[MiniSetup])
 
   def inputs(classpath: Seq[File], sources: Seq[File], classesDirectory: File, options: Seq[String],
     javacOptions: Seq[String], maxErrors: Int, sourcePositionMappers: Seq[Position => Option[Position]],
@@ -149,7 +147,7 @@ object Compiler {
         in.inputs.compilers.javac.xsbtiCompiler // ).getOrElse(in.inputs.compilers.javac)
       // TODO - Why are we not using the IC interface???
       IC.incrementalCompile(scalac, javacChosen, sources, classpath, CompileOutput(classesDirectory), cache, None, options, javacOptions,
-        in.previousAnalysis.analysis, in.previousAnalysis.setup, analysisMap, definesClass, reporter, order, skip, incOptions)(log)
+        Some(in.previousAnalysis.analysis), in.previousAnalysis.setup, analysisMap, definesClass, reporter, order, skip, incOptions)(log)
     }
 
   private[sbt] def foldMappers[A](mappers: Seq[A => Option[A]]) =
