@@ -4,8 +4,8 @@
 package sbt
 
 import java.io.File
-import sbt.internal.inc.AnalyzingCompiler
-import sbt.internal.util.JLine
+import sbt.internal.inc.{ IncrementalCompilerImpl, AnalyzingCompiler }
+import xsbti.compile.Inputs
 import sbt.util.Logger
 
 final class Console(compiler: AnalyzingCompiler) {
@@ -28,5 +28,7 @@ final class Console(compiler: AnalyzingCompiler) {
     }
 }
 object Console {
-  def apply(conf: Compiler.Inputs): Console = new Console(conf.compilers.scalac)
+  def apply(conf: Inputs): Console = conf.compilers match {
+    case compilers: IncrementalCompilerImpl.Compilers => new Console(compilers.scalac)
+  }
 }

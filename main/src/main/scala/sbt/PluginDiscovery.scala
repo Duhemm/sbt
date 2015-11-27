@@ -10,6 +10,7 @@ import xsbt.api.{ Discovered, Discovery }
 import sbt.internal.inc.{ Analysis, ModuleUtilities }
 
 import sbt.io.IO
+import xsbti.compile.CompileAnalysis
 
 object PluginDiscovery {
   /**
@@ -48,8 +49,9 @@ object PluginDiscovery {
     }
 
   /** Discovers the sbt-plugin-related top-level modules from the provided source `analysis`. */
-  def discoverSourceAll(analysis: Analysis): DiscoveredNames =
+  def discoverSourceAll(analysis0: CompileAnalysis): DiscoveredNames =
     {
+      val analysis = analysis0 match { case a: Analysis => a }
       def discover[T](implicit classTag: reflect.ClassTag[T]): Seq[String] =
         sourceModuleNames(analysis, classTag.runtimeClass.getName)
       new DiscoveredNames(discover[Plugin], discover[AutoPlugin], discover[Build])
