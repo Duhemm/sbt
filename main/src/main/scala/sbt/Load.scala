@@ -12,7 +12,7 @@ import java.net.{ URI, URL }
 import compiler.{ Eval, EvalImports }
 import scala.annotation.tailrec
 import collection.mutable
-import Compiler.Compilers
+import sbt.internal.inc.IncrementalCompilerImpl.Compilers
 import sbt.internal.inc.{ Analysis, ClasspathOptions, FileValueCache, Locate, ModuleUtilities }
 import sbt.internal.inc.classpath.ClasspathUtilities
 import Project.{ inScope, makeSettings }

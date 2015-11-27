@@ -4,7 +4,8 @@
 package sbt
 
 import sbt.internal.inc.{ IncrementalCompilerImpl, ScalaInstance, AnalyzingCompiler, ComponentCompiler }
-import sbt.internal.inc.javac.{ IncrementalCompilerJavaTools, JavaTools }
+import sbt.internal.inc.IncrementalCompilerImpl.Compilers
+import sbt.internal.inc.javac.JavaTools
 import xsbti.{ Logger => _, _ }
 import xsbti.compile.{ ClasspathOptions, CompileResult, Inputs }
 import java.io.File
@@ -38,7 +39,7 @@ object Compiler {
   //  }
 
   /** The instances of Scalac/Javac used to compile the current project. */
-  final case class Compilers(scalac: AnalyzingCompiler, javac: IncrementalCompilerJavaTools) extends xsbti.compile.Compilers
+  //  final case class Compilers(scalac: AnalyzingCompiler, javac: IncrementalCompilerJavaTools) extends xsbti.compile.Compilers
 
   /** The previous source dependency analysis result from compilation. */
   //  final case class PreviousAnalysis(analysis: Analysis, setup: Option[MiniSetup])
