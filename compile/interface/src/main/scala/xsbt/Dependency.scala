@@ -96,7 +96,8 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
 
   private abstract class ExtractDependenciesTraverser extends Traverser {
     protected val depBuf = collection.mutable.ArrayBuffer.empty[Symbol]
-    protected def addDependency(dep: Symbol): Unit = depBuf += dep
+    def isSynthetic(t: Tree): Boolean = !t.pos.isRange
+    protected def addDependency(from: Tree, dep: Symbol): Unit = if (!isSynthetic(from) && !dep.isSynthetic) depBuf += dep
     def dependencies: collection.immutable.Set[Symbol] = {
       // convert to immutable set and remove NoSymbol if we have one
       depBuf.toSet - NoSymbol
@@ -124,11 +125,11 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
             case ImportSelector(name: Name, _, _, _) =>
               def lookupImported(name: Name) = expr.symbol.info.member(name)
               // importing a name means importing both a term and a type (if they exist)
-              addDependency(lookupImported(name.toTermName))
-              addDependency(lookupImported(name.toTypeName))
+              addDependency(tree, lookupImported(name.toTermName))
+              addDependency(tree, lookupImported(name.toTypeName))
           }
         case select: Select =>
-          addDependency(select.symbol)
+          addDependency(tree, select.symbol)
         /*
          * Idents are used in number of situations:
          *  - to refer to local variable
@@ -138,7 +139,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
          *    https://groups.google.com/d/topic/scala-internals/Ms9WUAtokLo/discussion
          */
         case ident: Ident =>
-          addDependency(ident.symbol)
+          addDependency(tree, ident.symbol)
         // In some cases (eg. macro annotations), `typeTree.tpe` may be null.
         // See sbt/sbt#1593 and sbt/sbt#1655.
         case typeTree: TypeTree if typeTree.tpe != null =>
@@ -147,7 +148,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
           })
           typeSymbolCollector.traverse(typeTree.tpe)
           val deps = typeSymbolCollector.collected.toSet
-          deps.foreach(addDependency)
+          deps.foreach(addDependency(tree, _))
         case Template(parents, self, body) =>
           traverseTrees(body)
         case MacroExpansionOf(original) if inspectedOriginalTrees.add(original) =>
@@ -178,7 +179,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile {
         // type aliases to be expanded
         val parentTypeSymbols = parents.map(parent => parent.tpe.typeSymbol).toSet
         debuglog("Parent type symbols for " + tree.pos + ": " + parentTypeSymbols.map(_.fullName))
-        parentTypeSymbols.foreach(addDependency)
+        parentTypeSymbols.foreach(addDependency(tree, _))
         traverseTrees(body)
       case tree => super.traverse(tree)
     }
