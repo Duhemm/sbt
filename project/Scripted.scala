@@ -14,6 +14,7 @@ object Scripted {
 
   lazy val MavenResolverPluginTest = config("mavenResolverPluginTest") extend Compile
   lazy val RepoOverrideTest = config("repoOverrideTest") extend Compile
+  lazy val StaticLauncherTest = config("staticLauncherTest") extend Compile
 
   import sbt.complete._
   import DefaultParsers._

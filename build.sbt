@@ -390,24 +390,11 @@ lazy val compilerIntegrationProj = (project in (compilePath / "integration")).
     name := "Compiler Integration"
   )
 
-lazy val packageBridgeSource = settingKey[Boolean]("Whether to package the compiler bridge sources in compiler ivy project's resources.")
 lazy val compilerIvyProj = (project in compilePath / "ivy").
   dependsOn (ivyProj, compilerProj).
   settings(
     baseSettings,
-    name := "Compiler Ivy Integration",
-    packageBridgeSource := false,
-    resourceGenerators in Compile <+= Def.task {
-      if (packageBridgeSource.value) {
-        val compilerBridgeSrc = (Keys.packageSrc in (compileInterfaceProj, Compile)).value
-        val xsbtiJAR = (Keys.packageBin in (interfaceProj, Compile)).value
-        // They are immediately used by the static launcher.
-        val included = Set("scala-compiler.jar", "scala-library.jar", "scala-reflect.jar")
-        val scalaJars = (externalDependencyClasspath in Compile).value.map(_.data).filter(j => included contains j.getName)
-        Seq(compilerBridgeSrc, xsbtiJAR) ++ scalaJars
-      }
-      else Nil
-    }
+    name := "Compiler Ivy Integration"
   )
 
 lazy val scriptedBaseProj = (project in scriptedPath / "base").
@@ -472,6 +459,7 @@ lazy val mainProj = (project in mainPath).
     libraryDependencies ++= scalaXml.value ++ Seq(launcherInterface)
   )
 
+lazy val staticLauncherResourcesGen = taskKey[Seq[File]]("Generate resources for static launcher")
 // Strictly for bringing implicits and aliases from subsystems into the top-level sbt namespace through a single package object
 //  technically, we need a dependency on all of mainProj's dependencies, but we don't do that since this is strictly an integration project
 //  with the sole purpose of providing certain identifiers without qualification (with a package object)
@@ -480,7 +468,18 @@ lazy val sbtProj = (project in sbtPath).
   settings(
     baseSettings,
     name := "sbt",
-    normalizedName := "sbt"
+    normalizedName := "sbt",
+    staticLauncherResourcesGen := {
+      val compilerBridgeSrc = (Keys.packageSrc in (compileInterfaceProj, Compile)).value
+      val xsbtiJAR = (Keys.packageBin in (interfaceProj, Compile)).value
+      // They are immediately used by the static launcher.
+      val included = Set("scala-compiler.jar", "scala-library.jar", "scala-reflect.jar")
+      val scalaJars = (externalDependencyClasspath in Compile).value.map(_.data).filter(j => included contains j.getName)
+      Seq(compilerBridgeSrc, xsbtiJAR) ++ scalaJars
+    },
+    // FIXME: We would like to generate those only in assembly, but resourceGenerators in (Compile, assembly) doesn't
+    // work as expected (nothing gets generated).
+    resourceGenerators in Compile += staticLauncherResourcesGen.taskValue
   )
 
 lazy val mavenResolverPluginProj = (project in file("sbt-maven-resolver")).
@@ -492,6 +491,21 @@ lazy val mavenResolverPluginProj = (project in file("sbt-maven-resolver")).
     dependencyOverrides += plexusUtils,
     sbtPlugin := true
   )
+
+def scriptedStaticTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
+  val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
+  val staticLauncherJar = (assembly in sbtProj).value
+  val cp = (fullClasspath in scriptedSbtProj in Test).value
+  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value)
+}
+
+def scriptedUnpublishedStaticTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
+  val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
+  val staticLauncherJar = (target in sbtProj).value / (assemblyJarName in sbtProj in assembly).value
+  val cp = (fullClasspath in scriptedSbtProj in Test).value
+  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value)
+}
+
 
 def scriptedTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
@@ -564,6 +578,13 @@ def otherRootSettings = Seq(
   Scripted.scripted <<= scriptedTask,
   Scripted.scriptedUnpublished <<= scriptedUnpublishedTask,
   Scripted.scriptedSource := (sourceDirectory in sbtProj).value / "repo-override-test"
+)) ++ inConfig(Scripted.StaticLauncherTest)(Seq(
+  Scripted.scriptedPrescripted := {
+    val interfaceJarName = (Keys.packageSrc in (compileInterfaceProj, Compile)).value.getName
+    r => { addSbtAlternateResolver(r) }
+  },
+  Scripted.scripted <<= scriptedStaticTask,
+  Scripted.scriptedUnpublished <<= scriptedUnpublishedStaticTask
 ))
 
 def addSbtAlternateResolver(scriptedRoot: File) = {
@@ -690,16 +711,5 @@ def customCommands: Seq[Setting[_]] = Seq(
       "publish" ::
       "bintrayRelease" ::
       state
-  },
-  // Produces a fat runnable JAR that contains everything needed to use sbt.
-  commands += Command.command("install") { state =>
-    val packageBridgeSourceKey = packageBridgeSource.key.label
-    val compilerIvy = compilerIvyProj.id
-    val sbt = sbtProj.id
-    s"$compilerIvy/clean" ::
-      s"set $packageBridgeSourceKey in $compilerIvy := true" ::
-      s"$sbt/assembly" ::
-      s"set $packageBridgeSourceKey in $compilerIvy := false" ::
-      state
   }
-)
+) ++ addCommandAlias("install", "sbtProj/assembly")
