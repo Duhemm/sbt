@@ -89,8 +89,13 @@ private class StaticLauncher(appProvider: StaticAppProvider, scalaProvider: Stat
 
   override def bootDirectory(): File = new File(sys props "user.home") / ".sbt" / "boot"
 
-  override def ivyRepositories(): Array[xsbti.Repository] = appRepositories
-  override def appRepositories(): Array[xsbti.Repository] = Array(new FakeRepository(new FakeResolver("fakeresolver", bootDirectory / "fakeresolver-cache", modules)))
+  override def ivyRepositories(): Array[xsbti.Repository] = {
+    val fake = new FakeRepository(new FakeResolver("fakeresolver", bootDirectory / "fakeresolver-cache", modules))
+    val local = new xsbti.PredefinedRepository { override def id(): xsbti.Predefined = xsbti.Predefined.Local }
+    Array(fake, local)
+  }
+
+  override def appRepositories(): Array[xsbti.Repository] = ivyRepositories()
 
   override def isOverrideRepositories(): Boolean = false
 
