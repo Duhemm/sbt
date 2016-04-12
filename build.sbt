@@ -463,7 +463,7 @@ lazy val staticLauncherResourcesGen = taskKey[Seq[File]]("Generate resources for
 // Strictly for bringing implicits and aliases from subsystems into the top-level sbt namespace through a single package object
 //  technically, we need a dependency on all of mainProj's dependencies, but we don't do that since this is strictly an integration project
 //  with the sole purpose of providing certain identifiers without qualification (with a package object)
-lazy val sbtProj = (project in sbtPath).
+lazy val sbtProj: Project = (project in sbtPath).
   dependsOn(mainProj, compileInterfaceProj, scriptedSbtProj % "test->test").
   settings(
     baseSettings,
@@ -472,10 +472,11 @@ lazy val sbtProj = (project in sbtPath).
     staticLauncherResourcesGen := {
       val compilerBridgeSrc = (Keys.packageSrc in (compileInterfaceProj, Compile)).value
       val xsbtiJAR = (Keys.packageBin in (interfaceProj, Compile)).value
+      val sbtMavenResolver = (assembly in (mavenResolverPluginProj, Compile)).value
       // They are immediately used by the static launcher.
       val included = Set("scala-compiler.jar", "scala-library.jar", "scala-reflect.jar")
       val scalaJars = (externalDependencyClasspath in Compile).value.map(_.data).filter(j => included contains j.getName)
-      Seq(compilerBridgeSrc, xsbtiJAR) ++ scalaJars
+      Seq(compilerBridgeSrc, xsbtiJAR, sbtMavenResolver) ++ scalaJars
     },
     // FIXME: We would like to generate those only in assembly, but resourceGenerators in (Compile, assembly) doesn't
     // work as expected (nothing gets generated).
@@ -483,7 +484,7 @@ lazy val sbtProj = (project in sbtPath).
   )
 
 lazy val mavenResolverPluginProj = (project in file("sbt-maven-resolver")).
-  dependsOn(sbtProj, ivyProj % "test->test").
+  dependsOn(ivyProj % "test->test").
   settings(
     baseSettings,
     name := "sbt-maven-resolver",

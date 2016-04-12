@@ -26,6 +26,8 @@ private object StaticUtils {
   val BRIDGE_JAR = s"compiler-interface-${sbtApplicationID.version}-sources.jar"
   val XSBTI = "xsbti"
   val XSBTI_JAR = s"interface-${sbtApplicationID.version}.jar"
+  val MAVEN_RESOLVER_PLUGIN = "maven-resolver-plugin"
+  val MAVEN_RESOLVER_PLUGIN_JAR = s"sbt-maven-resolver-assembly-${sbtApplicationID.version}.jar"
   val thisJAR: File = new File(getClass.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
 
   def getProperty(loader: ClassLoader, filename: String, property: String): Option[String] =
@@ -109,7 +111,12 @@ private class StaticLauncher(appProvider: StaticAppProvider, scalaProvider: Stat
     ("org.scala-sbt", "compiler-interface", sbtApplicationID.version) -> {
       val file = scalaProvider.getComponent(StaticUtils.BRIDGE)
       Seq(FakeResolver.FakeArtifact("compiler-interface", "src", "jar", file))
-    }
+    },
+
+    ("org.scala-sbt", "sbt-maven-resolver", sbtApplicationID.version) ->
+      appProvider.components.component(StaticUtils.MAVEN_RESOLVER_PLUGIN).map { f =>
+        FakeResolver.FakeArtifact(f.getName, "jar", "jar", f)
+      }.toSeq
   )
 }
 
@@ -149,6 +156,10 @@ private class StaticAppProvider(appConfig: StaticAppConfiguration) extends xsbti
 
   if (components.component(StaticUtils.BRIDGE).isEmpty) {
     installFromResources(StaticUtils.BRIDGE_JAR, StaticUtils.BRIDGE)
+  }
+
+  if (components.component(StaticUtils.MAVEN_RESOLVER_PLUGIN).isEmpty) {
+    installFromResources(StaticUtils.MAVEN_RESOLVER_PLUGIN_JAR, StaticUtils.MAVEN_RESOLVER_PLUGIN)
   }
 
   override def components(): xsbti.ComponentProvider = new StaticComponentProvider(scalaProvider.launcher.bootDirectory)
