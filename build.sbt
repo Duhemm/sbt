@@ -33,7 +33,7 @@ def commonSettings: Seq[Setting[_]] = Seq(
 
 def minimalSettings: Seq[Setting[_]] =
   commonSettings ++ customCommands ++
-  publishPomSettings ++ Release.javaVersionCheckSettings
+  publishPomSettings ++ Release.javaVersionCheckSettings ++ altPublishSettings
 
 def baseSettings: Seq[Setting[_]] =
   minimalSettings ++ Seq(projectComponent) ++ baseScalacOptions ++ Licensed.settings ++ Formatting.settings
@@ -118,8 +118,7 @@ lazy val interfaceProj = (project in file("interface")).
       sourceManaged in Compile,
       mainClass in datatypeProj in Compile,
       runner,
-      streams) map generateAPICached,
-    altPublishSettings
+      streams) map generateAPICached
   )
 
 // defines operations on the API of a source, including determining whether it has changed and converting it to a string
@@ -463,23 +462,25 @@ lazy val mavenResolverPluginProj = (project in file("sbt-maven-resolver")).
 
 def scriptedTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
-  publishAll.value
+  publishAllAlt.value
   // These two projects need to be visible in a repo even if the default
   // local repository is hidden, so we publish them to an alternate location and add
   // that alternate repo to the running scripted test (in Scripted.scriptedpreScripted).
   (altLocalPublish in interfaceProj).value
   (altLocalPublish in compileInterfaceProj).value
   doScripted((sbtLaunchJar in bundledLauncherProj).value, (fullClasspath in scriptedSbtProj in Test).value,
-    (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value)
+    (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedBootProperties.value, scriptedPrescripted.value)
 }
 
 def scriptedUnpublishedTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
   doScripted((sbtLaunchJar in bundledLauncherProj).value, (fullClasspath in scriptedSbtProj in Test).value,
-    (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value)
+    (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedBootProperties.value, scriptedPrescripted.value)
 }
 
-lazy val publishAll = TaskKey[Unit]("publish-all")
+lazy val publishAll = TaskKey[Unit]("publish-all", "Publish all projects in local Ivy repo.")
+lazy val publishAllAlt = TaskKey[Unit]("publish-all-alt", "Publish all projects in alternate local Ivy repo.")
+lazy val scriptedBootProperties = TaskKey[File => String]("scripted-boot-properties")
 lazy val publishLauncher = TaskKey[Unit]("publish-launcher")
 
 lazy val myProvided = config("provided") intransitive
@@ -507,7 +508,34 @@ def otherRootSettings = Seq(
   publishAll := {
     val _ = (publishLocal).all(ScopeFilter(inAnyProject)).value
   },
-  aggregate in bintrayRelease := false
+  publishAllAlt := {
+    val _ = (altLocalPublish).all(ScopeFilter(inAnyProject)).value
+  },
+  aggregate in bintrayRelease := false,
+  scriptedBootProperties := {
+    (ivyHome: File) =>
+      s"""[scala]
+         |  version: ${scalaVersion.value}
+         |
+         |[app]
+         |  org: ${organization.value}
+         |  name: ${(name in sbtProj).value}
+         |  version: ${version.value}
+         |  class: sbt.xMain
+         |  components: xsbti,extra
+         |  cross-versioned: false
+         |
+         |[repositories]
+         |  alt-local: ${file(altLocalRepoPath).toURI.toURL}, [organization]/[module]/[revision]/[type]s/[artifact](-[classifier]).[ext]
+         |  local
+         |  typesafe-ivy-releases: https://repo.typesafe.com/typesafe/ivy-releases/, [organization]/[module]/[revision]/[type]s/[artifact](-[classifier]).[ext]
+         |  maven-central
+         |  sonatype-snapshots: https://oss.sonatype.org/content/repositories/snapshots
+         |
+         |[ivy]
+         |  ivy-home: $ivyHome
+         |  checksums: $${sbt.checksums-sha1,md5})""".stripMargin
+  }
 ) ++ inConfig(Scripted.MavenResolverPluginTest)(Seq(
   Scripted.scripted <<= scriptedTask,
   Scripted.scriptedUnpublished <<= scriptedUnpublishedTask,
