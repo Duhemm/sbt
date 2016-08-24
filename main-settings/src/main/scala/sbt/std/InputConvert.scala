@@ -10,7 +10,7 @@ import sbt.internal.util.complete.Parser
 import sbt.internal.util.appmacro.{ Convert, Converted }
 
 object InputInitConvert extends Convert {
-  def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
+  def apply[T: c.WeakTypeTag](c: blackbox.Context)(nme: String, in: c.Tree): Converted[c.type] =
     if (nme == InputWrapper.WrapInitName)
       Converted.Success(in)
     else if (nme == InputWrapper.WrapInitTaskName)
@@ -21,7 +21,7 @@ object InputInitConvert extends Convert {
 
 /** Converts an input `Tree` of type `Parser[T]` or `State => Parser[T]` into a `Tree` of type `State => Parser[T]`.*/
 object ParserConvert extends Convert {
-  def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
+  def apply[T: c.WeakTypeTag](c: blackbox.Context)(nme: String, in: c.Tree): Converted[c.type] =
     {
       if (nme == ParserInput.WrapName)
         Converted.Success(in)
@@ -34,7 +34,7 @@ object ParserConvert extends Convert {
 
 /** Convert instance for plain `Task`s not within the settings system. */
 object TaskConvert extends Convert {
-  def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
+  def apply[T: c.WeakTypeTag](c: blackbox.Context)(nme: String, in: c.Tree): Converted[c.type] =
     if (nme == InputWrapper.WrapTaskName)
       Converted.Success(in)
     else
@@ -44,7 +44,7 @@ object TaskConvert extends Convert {
 /** Converts an input `Tree` of type `Initialize[T]`, `Initialize[Task[T]]`, or `Task[T]` into a `Tree` of type `Initialize[Task[T]]`.*/
 object FullConvert extends Convert {
   import InputWrapper._
-  def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
+  def apply[T: c.WeakTypeTag](c: blackbox.Context)(nme: String, in: c.Tree): Converted[c.type] =
     if (nme == WrapInitTaskName || nme == WrapPreviousName)
       Converted.Success(in)
     else if (nme == WrapInitName) {
@@ -64,7 +64,7 @@ object FullConvert extends Convert {
  * into a `Tree` of type `Initialize[State => Parser[T]]`.
  */
 object InitParserConvert extends Convert {
-  def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
+  def apply[T: c.WeakTypeTag](c: blackbox.Context)(nme: String, in: c.Tree): Converted[c.type] =
     if (nme == ParserInput.WrapName) {
       val e = c.Expr[State => Parser[T]](in)
       val t = c.universe.reify { Def.valueStrict[State => Parser[T]](e.splice) }

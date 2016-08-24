@@ -11,11 +11,12 @@ import sbt.internal.util.Types.:+:
 import sbt.io.syntax._
 import sbt.io.IO
 
-import sbinary.DefaultProtocol.FileFormat
-import sbt.internal.util.Cache.{ defaultEquiv, hConsCache, hNilCache, seqCache, seqFormat, streamFormat, StringFormat, UnitFormat, wrapIn }
-import sbt.internal.util.Tracked.{ inputChanged, outputChanged }
-import sbt.internal.util.{ FilesInfo, HashFileInfo, HNil, ModifiedFileInfo, PlainFileInfo }
-import sbt.internal.util.FilesInfo.{ exists, hash, lastModified }
+// import sbt.internal.util.Cache.{ defaultEquiv, hConsCache, hNilCache, seqCache, seqFormat, streamFormat, StringFormat, UnitFormat, wrapIn }
+
+import sbt.internal.util.CacheStoreFactory
+import sbt.internal.util.Tracked.{ inputChanged }
+// import sbt.internal.util.{ FilesInfo, HashFileInfo, HNil, ModifiedFileInfo, PlainFileInfo }
+// import sbt.internal.util.FilesInfo.{ exists, hash, lastModified }
 import xsbti.Reporter
 import xsbti.compile.JavaTools
 
@@ -23,14 +24,14 @@ import sbt.util.Logger
 
 object Doc {
   import RawCompileLike._
-  def scaladoc(label: String, cache: File, compiler: AnalyzingCompiler): Gen =
-    scaladoc(label, cache, compiler, Seq())
-  def scaladoc(label: String, cache: File, compiler: AnalyzingCompiler, fileInputOptions: Seq[String]): Gen =
-    cached(cache, fileInputOptions, prepare(label + " Scala API documentation", compiler.doc))
-  def javadoc(label: String, cache: File, doc: JavaTools, log: Logger, reporter: Reporter): Gen =
-    javadoc(label, cache, doc, log, reporter, Seq())
-  def javadoc(label: String, cache: File, doc: JavaTools, log: Logger, reporter: Reporter, fileInputOptions: Seq[String]): Gen =
-    cached(cache, fileInputOptions, prepare(label + " Java API documentation", filterSources(javaSourcesOnly,
+  def scaladoc(label: String, cacheStoreFactory: CacheStoreFactory, compiler: AnalyzingCompiler): Gen =
+    scaladoc(label, cacheStoreFactory, compiler, Seq())
+  def scaladoc(label: String, cacheStoreFactory: CacheStoreFactory, compiler: AnalyzingCompiler, fileInputOptions: Seq[String]): Gen =
+    cached(cacheStoreFactory, fileInputOptions, prepare(label + " Scala API documentation", compiler.doc))
+  def javadoc(label: String, cacheStoreFactory: CacheStoreFactory, doc: JavaTools, log: Logger, reporter: Reporter): Gen =
+    javadoc(label, cacheStoreFactory, doc, log, reporter, Seq())
+  def javadoc(label: String, cacheStoreFactory: CacheStoreFactory, doc: JavaTools, log: Logger, reporter: Reporter, fileInputOptions: Seq[String]): Gen =
+    cached(cacheStoreFactory, fileInputOptions, prepare(label + " Java API documentation", filterSources(javaSourcesOnly,
       (sources: Seq[File], classpath: Seq[File], outputDirectory: File, options: Seq[String], maxErrors: Int, log: Logger) => {
         // doc.doc
         ???

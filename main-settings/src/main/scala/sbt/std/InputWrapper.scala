@@ -43,19 +43,19 @@ object InputWrapper {
 
   private[this] def implDetailError = sys.error("This method is an implementation detail and should not be referenced.")
 
-  private[std] def wrapTask[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrapTask[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     wrapImpl[T, InputWrapper.type](c, InputWrapper, WrapTaskName)(ts, pos)
-  private[std] def wrapInit[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrapInit[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     wrapImpl[T, InputWrapper.type](c, InputWrapper, WrapInitName)(ts, pos)
-  private[std] def wrapInitTask[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrapInitTask[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     wrapImpl[T, InputWrapper.type](c, InputWrapper, WrapInitTaskName)(ts, pos)
 
-  private[std] def wrapInitInputTask[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrapInitInputTask[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     wrapImpl[T, InputWrapper.type](c, InputWrapper, WrapInitInputName)(ts, pos)
-  private[std] def wrapInputTask[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrapInputTask[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     wrapImpl[T, InputWrapper.type](c, InputWrapper, WrapInputName)(ts, pos)
 
-  private[std] def wrapPrevious[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[Option[T]] =
+  private[std] def wrapPrevious[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[Option[T]] =
     wrapImpl[Option[T], InputWrapper.type](c, InputWrapper, WrapPreviousName)(ts, pos)
 
   /**
@@ -64,7 +64,7 @@ object InputWrapper {
    *
    * `c.universe.reify { <s>.<wrapName>[T](ts.splice) }`
    */
-  def wrapImpl[T: c.WeakTypeTag, S <: AnyRef with Singleton](c: Context, s: S, wrapName: String)(ts: c.Expr[Any], pos: c.Position)(implicit it: c.TypeTag[s.type]): c.Expr[T] =
+  def wrapImpl[T: c.WeakTypeTag, S <: AnyRef with Singleton](c: blackbox.Context, s: S, wrapName: String)(ts: c.Expr[Any], pos: c.Position)(implicit it: c.TypeTag[s.type]): c.Expr[T] =
     {
       import c.universe.{ Apply => ApplyTree, _ }
       import internal.decorators._
@@ -88,7 +88,7 @@ object InputWrapper {
       c.Expr[T](typedTree)
     }
 
-  def valueMacroImpl[T: c.WeakTypeTag](c: Context): c.Expr[T] =
+  def valueMacroImpl[T: c.WeakTypeTag](c: blackbox.Context): c.Expr[T] =
     ContextUtil.selectMacroImpl[T](c) { (ts, pos) =>
       val tpe = ts.tree.tpe
       if (tpe <:< c.weakTypeOf[Initialize[Task[T]]])
@@ -104,7 +104,7 @@ object InputWrapper {
       else
         c.abort(pos, s"Internal sbt error. Unexpected type ${tpe.widen}")
     }
-  def taskValueMacroImpl[T: c.WeakTypeTag](c: Context): c.Expr[Task[T]] =
+  def taskValueMacroImpl[T: c.WeakTypeTag](c: blackbox.Context): c.Expr[Task[T]] =
     ContextUtil.selectMacroImpl[Task[T]](c) { (ts, pos) =>
       val tpe = ts.tree.tpe
       if (tpe <:< c.weakTypeOf[Initialize[Task[T]]])
@@ -113,7 +113,7 @@ object InputWrapper {
         c.abort(pos, s"Internal sbt error. Unexpected type ${tpe.widen}")
     }
   /** Translates <task: TaskKey[T]>.previous(format) to Previous.runtime(<task>)(format).value*/
-  def previousMacroImpl[T: c.WeakTypeTag](c: Context)(format: c.Expr[sbinary.Format[T]]): c.Expr[Option[T]] =
+  def previousMacroImpl[T: c.WeakTypeTag](c: blackbox.Context)(format: c.Expr[sjsonnew.JsonFormat[T]]): c.Expr[Option[T]] =
     {
       import c.universe._
       c.macroApplication match {
@@ -151,7 +151,7 @@ sealed abstract class ParserInputTask[T] {
 }
 sealed abstract class MacroPrevious[T] {
   @compileTimeOnly("`previous` can only be used within a task macro, such as :=, +=, ++=, or Def.task.")
-  def previous(implicit format: sbinary.Format[T]): Option[T] = macro InputWrapper.previousMacroImpl[T]
+  def previous(implicit format: sjsonnew.JsonFormat[T]): Option[T] = macro InputWrapper.previousMacroImpl[T]
 }
 
 /** Implementation detail.  The wrap method temporarily holds the input parser (as a Tree, at compile time) until the input task macro processes it. */
@@ -168,14 +168,14 @@ object ParserInput {
   @compileTimeOnly("`parsed` can only be used within an input task macro, such as := or Def.inputTask.")
   def initParser_\u2603\u2603[T](i: Any): T = sys.error("This method is an implementation detail and should not be referenced.")
 
-  private[std] def wrap[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrap[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     InputWrapper.wrapImpl[T, ParserInput.type](c, ParserInput, WrapName)(ts, pos)
-  private[std] def wrapInit[T: c.WeakTypeTag](c: Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
+  private[std] def wrapInit[T: c.WeakTypeTag](c: blackbox.Context)(ts: c.Expr[Any], pos: c.Position): c.Expr[T] =
     InputWrapper.wrapImpl[T, ParserInput.type](c, ParserInput, WrapInitName)(ts, pos)
 
-  private[std] def inputParser[T: c.WeakTypeTag](c: Context)(t: c.Expr[InputTask[T]]): c.Expr[State => Parser[Task[T]]] = c.universe.reify(t.splice.parser)
+  private[std] def inputParser[T: c.WeakTypeTag](c: blackbox.Context)(t: c.Expr[InputTask[T]]): c.Expr[State => Parser[Task[T]]] = c.universe.reify(t.splice.parser)
 
-  def parsedInputMacroImpl[T: c.WeakTypeTag](c: Context): c.Expr[Task[T]] =
+  def parsedInputMacroImpl[T: c.WeakTypeTag](c: blackbox.Context): c.Expr[Task[T]] =
     ContextUtil.selectMacroImpl[Task[T]](c) { (p, pos) =>
       import c.universe.reify
       val tpe = p.tree.tpe
@@ -190,7 +190,7 @@ object ParserInput {
     }
 
   /** Implements `Parser[T].parsed` by wrapping the Parser with the ParserInput wrapper.*/
-  def parsedMacroImpl[T: c.WeakTypeTag](c: Context): c.Expr[T] =
+  def parsedMacroImpl[T: c.WeakTypeTag](c: blackbox.Context): c.Expr[T] =
     ContextUtil.selectMacroImpl[T](c) { (p, pos) =>
       import c.universe.reify
       val tpe = p.tree.tpe

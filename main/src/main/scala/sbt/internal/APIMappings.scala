@@ -22,7 +22,7 @@ private[sbt] object APIMappings {
 
   private[this] def extractFromID(entry: File, mid: ModuleID, log: Logger): Option[(File, URL)] =
     for {
-      urlString <- mid.extraAttributes.get(SbtPomExtraProperties.POM_API_KEY)
+      urlString <- Option(mid.extraAttributes.get(SbtPomExtraProperties.POM_API_KEY))
       u <- parseURL(urlString, entry, log)
     } yield (entry, u)
 

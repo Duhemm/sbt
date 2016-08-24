@@ -200,6 +200,7 @@ final class PartBuildUnit(val unit: BuildUnit, val defined: Map[String, Project]
 }
 
 object BuildStreams {
+  import CacheIvy.isoString
   type Streams = std.Streams[ScopedKey[_]]
 
   final val GlobalPath = "$global"
@@ -207,7 +208,7 @@ object BuildStreams {
   final val StreamsDirectory = "streams"
 
   def mkStreams(units: Map[URI, LoadedBuildUnit], root: URI, data: Settings[Scope]): State => Streams = s =>
-    s get Keys.stateStreams getOrElse std.Streams(path(units, root, data), displayFull, LogManager.construct(data, s))
+    s get Keys.stateStreams getOrElse std.Streams(path(units, root, data), displayFull, LogManager.construct(data, s), sjsonnew.support.scalajson.unsafe.Converter)
 
   def path(units: Map[URI, LoadedBuildUnit], root: URI, data: Settings[Scope])(scoped: ScopedKey[_]): File =
     resolvePath(projectPath(units, root, scoped, data), nonProjectPath(scoped))

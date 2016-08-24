@@ -7,7 +7,7 @@ package internal
 import sbt.internal.util.Attributed
 import sbt.util.{ Level, Logger }
 
-import sbt.librarymanagement.{ Configurations, CrossVersion, MavenRepository, ModuleID, Resolver }
+import sbt.librarymanagement.{ Configurations, CrossVersion, CrossVersionUtil, Disabled, MavenRepository, ModuleID, Resolver }
 
 import java.io.File
 import Attributed.blankSeq
@@ -64,8 +64,8 @@ object IvyConsole {
   def parseManaged(arg: String, log: Logger): Seq[ModuleID] =
     arg match {
       case DepPattern(group, cross, name, version) =>
-        val crossV = if (cross.trim.isEmpty) CrossVersion.Disabled else CrossVersion.binary
-        ModuleID(group.trim, name.trim, version.trim, crossVersion = crossV) :: Nil
+        val crossV = if (cross.trim.isEmpty) new Disabled else CrossVersionUtil.binary
+        new ModuleID(group.trim, name.trim, version.trim).withCrossVersion(crossV) :: Nil
       case _ => log.warn("Ignoring invalid argument '" + arg + "'"); Nil
     }
 }

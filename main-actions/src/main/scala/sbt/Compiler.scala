@@ -13,6 +13,7 @@ import java.io.File
 import sbt.internal.librarymanagement.{ ComponentManager, IvyConfiguration }
 import sbt.librarymanagement.{ ModuleID, CrossVersion, VersionNumber }
 import sbt.util.Logger
+import sbt.internal.util.CacheStore
 
 object Compiler {
   val DefaultMaxErrors = 100
@@ -22,11 +23,11 @@ object Compiler {
       case _ => scalaCompilerBridgeSource2_11
     }
   private[sbt] def scalaCompilerBridgeSource2_10: ModuleID =
-    ModuleID(xsbti.ArtifactInfo.SbtOrganization, "compiler-bridge_2.10",
-      ComponentCompiler.incrementalVersion, Some("component")).sources()
+    new ModuleID(xsbti.ArtifactInfo.SbtOrganization, "compiler-bridge_2.10",
+      ComponentCompiler.incrementalVersion).withConfigurations(xsbti.Maybe.just("component")).sources()
   private[sbt] def scalaCompilerBridgeSource2_11: ModuleID =
-    ModuleID(xsbti.ArtifactInfo.SbtOrganization, "compiler-bridge_2.11",
-      ComponentCompiler.incrementalVersion, Some("component")).sources()
+    new ModuleID(xsbti.ArtifactInfo.SbtOrganization, "compiler-bridge_2.11",
+      ComponentCompiler.incrementalVersion).withConfigurations(xsbti.Maybe.just("component")).sources()
 
   /** Inputs necessary to run the incremental compiler. */
   // final case class Inputs(compilers: Compilers, config: Options, incSetup: IncSetup)
@@ -104,12 +105,12 @@ object Compiler {
   //     new AnalyzingCompiler(instance, provider, cpOptions)
   //   }
 
-  def compilers(cpOptions: ClasspathOptions, ivyConfiguration: IvyConfiguration)(implicit app: AppConfiguration, log: Logger): Compilers =
+  def compilers(cpOptions: ClasspathOptions, ivyConfiguration: IvyConfiguration, fileToStore: File => CacheStore)(implicit app: AppConfiguration, log: Logger): Compilers =
     {
       val scalaProvider = app.provider.scalaProvider
       val instance = ScalaInstance(scalaProvider.version, scalaProvider.launcher)
       val sourceModule = scalaCompilerBridgeSource2_11
-      compilers(instance, cpOptions, None, ivyConfiguration, sourceModule)
+      compilers(instance, cpOptions, None, ivyConfiguration, fileToStore, sourceModule)
     }
 
   // def compilers(instance: ScalaInstance, cpOptions: ClasspathOptions)(implicit app: AppConfiguration, log: Logger): Compilers =
@@ -117,16 +118,16 @@ object Compiler {
 
   // TODO: Get java compiler
   def compilers(instance: ScalaInstance, cpOptions: ClasspathOptions, javaHome: Option[File],
-    ivyConfiguration: IvyConfiguration, sourcesModule: ModuleID)(implicit app: AppConfiguration, log: Logger): Compilers = {
-    val scalac = scalaCompiler(instance, cpOptions, javaHome, ivyConfiguration, sourcesModule)
+    ivyConfiguration: IvyConfiguration, fileToStore: File => CacheStore, sourcesModule: ModuleID)(implicit app: AppConfiguration, log: Logger): Compilers = {
+    val scalac = scalaCompiler(instance, cpOptions, javaHome, ivyConfiguration, fileToStore, sourcesModule)
     val javac = JavaTools.directOrFork(instance, cpOptions, javaHome)
     new Compilers(scalac, javac)
   }
-  def scalaCompiler(instance: ScalaInstance, cpOptions: ClasspathOptions, javaHome: Option[File], ivyConfiguration: IvyConfiguration, sourcesModule: ModuleID)(implicit app: AppConfiguration, log: Logger): AnalyzingCompiler =
+  def scalaCompiler(instance: ScalaInstance, cpOptions: ClasspathOptions, javaHome: Option[File], ivyConfiguration: IvyConfiguration, fileToStore: File => CacheStore, sourcesModule: ModuleID)(implicit app: AppConfiguration, log: Logger): AnalyzingCompiler =
     {
       val launcher = app.provider.scalaProvider.launcher
       val componentManager = new ComponentManager(launcher.globalLock, app.provider.components, Option(launcher.ivyHome), log)
-      val provider = ComponentCompiler.interfaceProvider(componentManager, ivyConfiguration, sourcesModule)
+      val provider = ComponentCompiler.interfaceProvider(componentManager, ivyConfiguration, fileToStore, sourcesModule)
       new AnalyzingCompiler(instance, provider, cpOptions)
     }
 

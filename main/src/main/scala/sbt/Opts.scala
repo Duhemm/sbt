@@ -3,7 +3,7 @@
  */
 package sbt
 
-import sbt.librarymanagement.{ Credentials, MavenRepository, Resolver }
+import sbt.librarymanagement.{ Credentials, MavenRepository, Resolver, ResolverUtil }
 
 import java.io.File
 import java.net.URL
@@ -32,10 +32,10 @@ object Opts {
   }
   object resolver {
     import sbt.io.syntax._
-    val sonatypeReleases = Resolver.sonatypeRepo("releases")
-    val sonatypeSnapshots = Resolver.sonatypeRepo("snapshots")
+    val sonatypeReleases = ResolverUtil.sonatypeRepo("releases")
+    val sonatypeSnapshots = ResolverUtil.sonatypeRepo("snapshots")
     val sonatypeStaging = new MavenRepository("sonatype-staging", "https://oss.sonatype.org/service/local/staging/deploy/maven2")
-    val mavenLocalFile = Resolver.file("Local Repository", userHome / ".m2" / "repository" asFile)
+    val mavenLocalFile = ResolverUtil.file("Local Repository", userHome / ".m2" / "repository" asFile)(ResolverUtil.defaultPatterns)
   }
 }
 

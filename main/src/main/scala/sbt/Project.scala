@@ -18,6 +18,8 @@ import sbt.librarymanagement.Configuration
 
 import sbt.internal.util.{ AttributeKey, AttributeMap, Dag, Relation, Settings, Show, ~> }
 
+import sjsonnew.JsonFormat
+
 import language.experimental.macros
 
 sealed trait ProjectDefinition[PR <: ProjectReference] {
@@ -606,7 +608,7 @@ object Project extends ProjectExtra {
     import SessionVar.{ persistAndSet, resolveContext, set, transform => tx }
 
     def updateState(f: (State, S) => State): Def.Initialize[Task[S]] = i(t => tx(t, f))
-    def storeAs(key: TaskKey[S])(implicit f: sbinary.Format[S]): Def.Initialize[Task[S]] = (Keys.resolvedScoped, i) { (scoped, task) =>
+    def storeAs(key: TaskKey[S])(implicit f: JsonFormat[S]): Def.Initialize[Task[S]] = (Keys.resolvedScoped, i) { (scoped, task) =>
       tx(task, (state, value) => persistAndSet(resolveContext(key, scoped.scope, state), state, value)(f))
     }
     def keepAs(key: TaskKey[S]): Def.Initialize[Task[S]] =

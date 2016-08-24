@@ -19,7 +19,7 @@ import scala.reflect._
 import reflect.macros._
 
 object InitializeConvert extends Convert {
-  def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
+  def apply[T: c.WeakTypeTag](c: blackbox.Context)(nme: String, in: c.Tree): Converted[c.type] =
     if (nme == InputWrapper.WrapInitName) {
       val i = c.Expr[Initialize[T]](in)
       val t = c.universe.reify(i.splice).tree
@@ -33,9 +33,9 @@ object InitializeConvert extends Convert {
 }
 
 object SettingMacro {
-  def settingMacroImpl[T: c.WeakTypeTag](c: Context)(t: c.Expr[T]): c.Expr[Initialize[T]] =
+  def settingMacroImpl[T: c.WeakTypeTag](c: blackbox.Context)(t: c.Expr[T]): c.Expr[Initialize[T]] =
     Instance.contImpl[T, Id](c, InitializeInstance, InitializeConvert, MixedBuilder)(Left(t), Instance.idTransform[c.type])
 
-  def settingDynMacroImpl[T: c.WeakTypeTag](c: Context)(t: c.Expr[Initialize[T]]): c.Expr[Initialize[T]] =
+  def settingDynMacroImpl[T: c.WeakTypeTag](c: blackbox.Context)(t: c.Expr[Initialize[T]]): c.Expr[Initialize[T]] =
     Instance.contImpl[T, Id](c, InitializeInstance, InitializeConvert, MixedBuilder)(Right(t), Instance.idTransform[c.type])
 }

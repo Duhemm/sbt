@@ -10,9 +10,9 @@ object Dependencies {
 
   // sbt modules
   val ioVersion = "1.0.0-M6"
-  val utilVersion = "0.1.0-M13"
-  val librarymanagementVersion = "0.1.0-M12"
-  val zincVersion = "1.0.0-M5"
+  val utilVersion = "0.1.0-M13-64a648656cd48ff2d5a1e078df1eb2ebf55cd4dd"
+  val librarymanagementVersion = "0.1.0-57bdda2222c06aeabe2d7e6a3e425991c3e6702c-SNAPSHOT"
+  val zincVersion = "1.0.0-X2-SNAPSHOT-057f52e4f6791c03c3f39cfe1e658f8f72c575da"
   lazy val sbtIO = "org.scala-sbt" %% "io" % ioVersion
   lazy val utilCollection = "org.scala-sbt" %% "util-collection" % utilVersion
   lazy val utilLogging = "org.scala-sbt" %% "util-logging" % utilVersion
@@ -37,6 +37,8 @@ object Dependencies {
   lazy val compilerClasspath = "org.scala-sbt" %% "zinc-classpath" % zincVersion
   lazy val compilerApiInfo = "org.scala-sbt" %% "zinc-apiinfo" % zincVersion
   lazy val compilerIvyIntegration = "org.scala-sbt" %% "zinc-ivy-integration" % zincVersion
+
+  lazy val sjsonnewScalaJson = "com.eed3si9n" %% "sjson-new-scalajson" % "0.4.2"
 
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.11.4"
   lazy val specs2 = "org.specs2" %% "specs2" % "2.3.11"

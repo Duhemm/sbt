@@ -13,7 +13,7 @@ import java.io.File
 
 import sbt.internal.inc.ScalaInstance
 import sbt.io.IO
-import sbt.librarymanagement.CrossVersion
+import sbt.librarymanagement.{ CrossVersion, CrossVersionUtil }
 
 object Cross {
 
@@ -189,7 +189,7 @@ object Cross {
       case NamedScalaVersion(v, _) => (v, None)
     }
 
-    val binaryVersion = CrossVersion.binaryScalaVersion(version)
+    val binaryVersion = CrossVersionUtil.binaryScalaVersion(version)
 
     def logSwitchInfo(included: Seq[(ProjectRef, Seq[String])], excluded: Seq[(ProjectRef, Seq[String])]) = {
 
@@ -226,7 +226,7 @@ object Cross {
       } else {
 
         val (included, excluded) = projectScalaVersions.partition {
-          case (proj, scalaVersions) => scalaVersions.exists(v => CrossVersion.binaryScalaVersion(v) == binaryVersion)
+          case (proj, scalaVersions) => scalaVersions.exists(v => CrossVersionUtil.binaryScalaVersion(v) == binaryVersion)
         }
         logSwitchInfo(included, excluded)
         included.map(_._1)

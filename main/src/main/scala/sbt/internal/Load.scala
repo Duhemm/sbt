@@ -5,8 +5,8 @@ package sbt
 package internal
 
 import sbt.internal.util.{ Settings, Show, ~> }
-import sbt.librarymanagement.{ Configuration, Configurations, Resolver, UpdateOptions }
-import sbt.internal.librarymanagement.{ InlineIvyConfiguration, IvyPaths }
+import sbt.librarymanagement.{ Configuration, Configurations, Resolver, ResolverUtil, UpdateOptions }
+import sbt.internal.librarymanagement.{ DefaultFileToStore, InlineIvyConfiguration, IvyPaths }
 
 import java.io.File
 import java.net.{ URI, URL }
@@ -30,6 +30,7 @@ import sbt.io.{ GlobFilter, IO, Path }
 import sbt.internal.io.Alternatives
 import sbt.util.Logger
 import xsbti.compile.Compilers
+import sbt.util.InterfaceUtil.o2m
 
 private[sbt] object Load {
   // note that there is State passed in but not pulled out
@@ -53,10 +54,22 @@ private[sbt] object Load {
       val localOnly = false
       val lock = None
       val checksums = Nil
-      val ivyPaths = new IvyPaths(baseDirectory, bootIvyHome(state.configuration))
-      val ivyConfiguration = new InlineIvyConfiguration(ivyPaths, Resolver.withDefaultResolvers(Nil),
-        Nil, Nil, localOnly, lock, checksums, None, UpdateOptions(), log)
-      val compilers = Compiler.compilers(ClasspathOptionsUtil.boot, ivyConfiguration)(state.configuration, log)
+      val ivyPaths = new IvyPaths(baseDirectory, o2m(bootIvyHome(state.configuration)))
+      val ivyConfiguration = new InlineIvyConfiguration(
+        /* lock = */ o2m(lock),
+        /* baseDirectory = */ ivyPaths.baseDirectory,
+        /* log = */ log,
+        /* updateOptions = */ UpdateOptions(),
+        /* paths = */ ivyPaths,
+        /* resolvers = */ ResolverUtil.withDefaultResolvers(Nil).toArray,
+        /* otherResolvers = */ Array.empty,
+        /* moduleConfigurations = */ Array.empty,
+        /* localOnly = */ localOnly,
+        /* checksums = */ checksums.toArray,
+        /* resolutionCacheDir = */ xsbti.Maybe.nothing())
+      // new InlineIvyConfiguration(ivyPaths, Resolver.withDefaultResolvers(Nil),
+      //   Nil, Nil, localOnly, lock, checksums, None, UpdateOptions(), log)
+      val compilers = Compiler.compilers(ClasspathOptionsUtil.boot, ivyConfiguration, DefaultFileToStore)(state.configuration, log)
       val evalPluginDef = EvaluateTask.evalPluginDef(log) _
       val delegates = defaultDelegates
       val initialID = baseDirectory.getName

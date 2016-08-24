@@ -134,7 +134,7 @@ lazy val stdTaskProj = (project in file("tasks-standard")).
     testedBaseSettings,
     name := "Task System",
     testExclusive,
-    libraryDependencies ++= Seq(utilCollection, utilLogging, sbtIO)
+    libraryDependencies ++= Seq(utilCollection, utilLogging, utilCache, sbtIO)
   )
 
 // Embedded Scala code runner
@@ -171,7 +171,7 @@ lazy val actionsProj = (project in file("main-actions")).
     name := "Actions",
     libraryDependencies ++= Seq(compilerClasspath, utilCompletion, compilerApiInfo,
       zinc, compilerIvyIntegration, compilerInterface,
-      sbtIO, utilLogging, utilRelation, libraryManagement, utilTracking)
+      sbtIO, utilLogging, utilRelation, libraryManagement, utilTracking, sjsonnewScalaJson)
   )
 
 // General command support and core commands not specific to a build system
