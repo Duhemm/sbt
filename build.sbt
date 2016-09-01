@@ -497,14 +497,14 @@ def scriptedStaticTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
   val staticLauncherJar = (assembly in sbtProj).value
   val cp = (fullClasspath in scriptedSbtProj in Test).value
-  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value)
+  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value, scriptedLaunchOpts.value)
 }
 
 def scriptedUnpublishedStaticTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
   val staticLauncherJar = (target in sbtProj).value / (assemblyJarName in sbtProj in assembly).value
   val cp = (fullClasspath in scriptedSbtProj in Test).value
-  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value)
+  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value, scriptedLaunchOpts.value)
 }
 
 
@@ -673,7 +673,7 @@ def customCommands: Seq[Setting[_]] = Seq(
       state
   },
   safeUnitTests := {
-    test.all(safeProjects).value
+    val _ = test.all(safeProjects).value
   },
   otherUnitTests := {
     test.all(otherProjects)
