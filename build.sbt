@@ -36,6 +36,7 @@ def commonSettings: Seq[Setting[_]] = Seq(
     case PathList(ps @ _*) if ps.last endsWith ".class"            => MergeStrategy.first
     case PathList(ps @ _*) if ps.last endsWith "module.properties" => MergeStrategy.first
     case PathList(ps @ _*) if ps.last == "MANIFEST.MF"             => MergeStrategy.rename
+    case PathList(ps @ _*) if ps.last == "plugin.properties"       => MergeStrategy.discard
     case "LICENSE"                                                 => MergeStrategy.first
     case "NOTICE"                                                  => MergeStrategy.first
     // excluded from fat jar because otherwise we may pick it up when determining the `actualVersion`
