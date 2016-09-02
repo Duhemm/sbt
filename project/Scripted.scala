@@ -66,12 +66,12 @@ object Scripted {
   // Interface to cross class loader
   type SbtScriptedRunner = {
     def run(resourceBaseDirectory: File, bufferLog: Boolean, tests: Array[String], bootProperties: File,
-      launchOpts: Array[String], prescripted: java.util.List[File]): Unit
+      launchOpts: Array[String], prescripted: java.util.List[File], ivyHome: String): Unit
   }
 
   def doScripted(launcher: File, scriptedSbtClasspath: Seq[Attributed[File]],
     scriptedSbtInstance: ScalaInstance, sourcePath: File, args: Seq[String],
-    prescripted: File => Unit, launchOpts: Seq[String]): Unit = {
+    prescripted: File => Unit, launchOpts: Seq[String], ivyHome: String): Unit = {
     System.err.println(s"About to run tests: ${args.mkString("\n * ", "\n * ", "\n")}")
     val noJLine = new classpath.FilteredLoader(scriptedSbtInstance.loader, "jline." :: Nil)
     val loader = classpath.ClasspathUtilities.toLoader(scriptedSbtClasspath.files, noJLine)
@@ -87,7 +87,7 @@ object Scripted {
         def get(x: Int): sbt.File = ???
         def size(): Int = 0
       }
-      bridge.run(sourcePath, true, args.toArray, launcher, launchOpts.toArray, callback)
+      bridge.run(sourcePath, true, args.toArray, launcher, launchOpts.toArray, callback, ivyHome)
     } catch { case ite: java.lang.reflect.InvocationTargetException => throw ite.getCause }
   }
 }

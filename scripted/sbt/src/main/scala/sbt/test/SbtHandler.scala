@@ -12,7 +12,7 @@ import Logger._
 
 final case class SbtInstance(process: Process, server: IPC.Server)
 
-final class SbtHandler(directory: File, launcher: File, log: Logger, launchOpts: Seq[String] = Seq()) extends StatementHandler {
+final class SbtHandler(directory: File, launcher: File, log: Logger, launchOpts: Seq[String] = Seq(), ivyHome: String = "") extends StatementHandler {
   type State = Option[SbtInstance]
   def initialState = None
 
@@ -63,7 +63,7 @@ final class SbtHandler(directory: File, launcher: File, log: Logger, launchOpts:
     {
       val launcherJar = launcher.getAbsolutePath
       val globalBase = "-Dsbt.global.base=" + (new File(directory, "global")).getAbsolutePath
-      val args = "java" :: (launchOpts.toList ++ (globalBase :: "-jar" :: launcherJar :: ("<" + server.port) :: Nil))
+      val args = "java" :: (launchOpts.toList ++ (globalBase :: "-jar" :: launcherJar :: Nil)) ++ (if (ivyHome.isEmpty) Nil else ivyHome :: Nil) ++ (("<" + server.port) :: Nil)
       val io = BasicIO(log, false).withInput(_.close())
       val p = Process(args, directory) run (io)
       Spawn { p.exitValue(); server.close() }

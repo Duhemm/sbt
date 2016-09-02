@@ -7,8 +7,12 @@ import java.util.Properties
  * A Main class for running sbt without sbt launcher.
  */
 object Main {
-  def main(args: Array[String]): Unit = {
-    val appConfiguration = new StaticAppConfiguration(args)
+  def main(_args: Array[String]): Unit = {
+    val (ivyHome: File, args: Array[String]) = _args match {
+      case Array()                   => (null, Array.empty[String])
+      case Array(ivyHome, rest @ _*) => (new File(ivyHome), rest.toArray)
+    }
+    val appConfiguration = new StaticAppConfiguration(ivyHome, args)
     new xMain().run(appConfiguration)
   }
 }
@@ -76,7 +80,7 @@ private class WeakGlobalLock extends xsbti.GlobalLock {
   override def apply[T](lockFile: File, run: java.util.concurrent.Callable[T]): T = run.call
 }
 
-private class StaticLauncher(appProvider: StaticAppProvider, scalaProvider: StaticScalaProvider) extends xsbti.Launcher {
+private class StaticLauncher(appProvider: StaticAppProvider, scalaProvider: StaticScalaProvider, override val ivyHome: File) extends xsbti.Launcher {
   override def getScala(version: String): xsbti.ScalaProvider = getScala(version, "")
   override def getScala(version: String, reason: String): xsbti.ScalaProvider = getScala(version, reason, StaticUtils.SCALA_ORG)
   override def getScala(version: String, reason: String, scalaOrg: String): xsbti.ScalaProvider = {
@@ -94,14 +98,15 @@ private class StaticLauncher(appProvider: StaticAppProvider, scalaProvider: Stat
   override def ivyRepositories(): Array[xsbti.Repository] = {
     val fake = new FakeRepository(new FakeResolver("fakeresolver", bootDirectory / "fakeresolver-cache", modules))
     val local = new xsbti.PredefinedRepository { override def id(): xsbti.Predefined = xsbti.Predefined.Local }
-    Array(fake, local)
+    val mvn = new xsbti.PredefinedRepository { override def id(): xsbti.Predefined = xsbti.Predefined.MavenCentral }
+    Array(fake, local, mvn)
   }
 
   override def appRepositories(): Array[xsbti.Repository] = ivyRepositories()
 
   override def isOverrideRepositories(): Boolean = false
 
-  override def ivyHome(): File = null
+  // override def ivyHome(): File = null
   override def checksums(): Array[String] = Array.empty
 
   private lazy val modules = Map(
@@ -120,14 +125,14 @@ private class StaticLauncher(appProvider: StaticAppProvider, scalaProvider: Stat
   )
 }
 
-private class StaticScalaProvider(appProvider: StaticAppProvider) extends xsbti.ScalaProvider {
+private class StaticScalaProvider(appProvider: StaticAppProvider, ivyHome: File) extends xsbti.ScalaProvider {
 
   def getComponent(componentID: String): File = {
     val component = appProvider.components.component(componentID)
     assert(component.length == 1, s"""Component $componentID should have 1 file, ${component.length} files found: ${component.mkString(", ")}.""")
     component(0)
   }
-  override def launcher: xsbti.Launcher = new StaticLauncher(appProvider, this)
+  override def launcher: xsbti.Launcher = new StaticLauncher(appProvider, this, ivyHome)
   override def app(id: xsbti.ApplicationID): xsbti.AppProvider = appProvider
   override def compilerJar(): File = getComponent(StaticUtils.COMPILER)
   override def libraryJar(): File = getComponent(StaticUtils.LIBRARY)
@@ -136,7 +141,7 @@ private class StaticScalaProvider(appProvider: StaticAppProvider) extends xsbti.
   override def version(): String = StaticUtils.getProperty(loader, "compiler.properties", "version.number") getOrElse "unknown"
 }
 
-private class StaticAppProvider(appConfig: StaticAppConfiguration) extends xsbti.AppProvider {
+private class StaticAppProvider(appConfig: StaticAppConfiguration, ivyHome: File) extends xsbti.AppProvider {
 
   if (components.component(StaticUtils.COMPILER).isEmpty) {
     installFromResources(StaticUtils.COMPILER_JAR, StaticUtils.COMPILER)
@@ -169,7 +174,7 @@ private class StaticAppProvider(appConfig: StaticAppConfiguration) extends xsbti
   override def mainClass(): Class[xsbti.AppMain] = loader.loadClass(id.mainClass).asInstanceOf[Class[xsbti.AppMain]]
   override def mainClasspath(): Array[File] = Array(StaticUtils.thisJAR)
   override def newMain(): xsbti.AppMain = new xMain
-  override def scalaProvider(): xsbti.ScalaProvider = new StaticScalaProvider(this)
+  override def scalaProvider(): xsbti.ScalaProvider = new StaticScalaProvider(this, ivyHome)
 
   /**
    * Retrieves `fileName` from the resources and installs it in `componentID`.
@@ -197,7 +202,7 @@ private class StaticAppProvider(appConfig: StaticAppConfiguration) extends xsbti
     }
 }
 
-private class StaticAppConfiguration(override val arguments: Array[String]) extends xsbti.AppConfiguration {
+private class StaticAppConfiguration(ivyHome: File, override val arguments: Array[String]) extends xsbti.AppConfiguration {
   override val baseDirectory: File = new File(sys props "user.dir")
-  override val provider: xsbti.AppProvider = new StaticAppProvider(this)
+  override val provider: xsbti.AppProvider = new StaticAppProvider(this, ivyHome)
 }

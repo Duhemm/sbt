@@ -495,17 +495,21 @@ lazy val mavenResolverPluginProj = (project in file("sbt-maven-resolver")).
   )
 
 def scriptedStaticTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
-  val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
-  val staticLauncherJar = (assembly in sbtProj).value
-  val cp = (fullClasspath in scriptedSbtProj in Test).value
-  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value, scriptedLaunchOpts.value)
+  IO.withTemporaryDirectory { ivyHome =>
+    val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
+    val staticLauncherJar = (assembly in sbtProj).value
+    val cp = (fullClasspath in scriptedSbtProj in Test).value
+    doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value, scriptedLaunchOpts.value, ivyHome.getAbsolutePath)
+  }
 }
 
 def scriptedUnpublishedStaticTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
-  val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
-  val staticLauncherJar = (target in sbtProj).value / (assemblyJarName in sbtProj in assembly).value
-  val cp = (fullClasspath in scriptedSbtProj in Test).value
-  doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value, scriptedLaunchOpts.value)
+  IO.withTemporaryDirectory { ivyHome =>
+    val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
+    val staticLauncherJar = (target in sbtProj).value / (assemblyJarName in sbtProj in assembly).value
+    val cp = (fullClasspath in scriptedSbtProj in Test).value
+    doScripted(staticLauncherJar, cp, (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value, scriptedLaunchOpts.value, ivyHome.getAbsolutePath)
+  }
 }
 
 
@@ -519,14 +523,14 @@ def scriptedTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   (altLocalPublish in compileInterfaceProj).value
   doScripted((sbtLaunchJar in bundledLauncherProj).value, (fullClasspath in scriptedSbtProj in Test).value,
     (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value,
-    scriptedLaunchOpts.value)
+    scriptedLaunchOpts.value, "")
 }
 
 def scriptedUnpublishedTask: Def.Initialize[InputTask[Unit]] = Def.inputTask {
   val result = scriptedSource(dir => (s: State) => scriptedParser(dir)).parsed
   doScripted((sbtLaunchJar in bundledLauncherProj).value, (fullClasspath in scriptedSbtProj in Test).value,
     (scalaInstance in scriptedSbtProj).value, scriptedSource.value, result, scriptedPrescripted.value,
-    scriptedLaunchOpts.value)
+    scriptedLaunchOpts.value, "")
 }
 
 lazy val publishAll = TaskKey[Unit]("publish-all")
@@ -599,7 +603,7 @@ def addSbtAlternateResolver(scriptedRoot: File) = {
                           |  override def requires = sbt.plugins.JvmPlugin
                           |  override def trigger = allRequirements
                           |
-                          |  override lazy val projectSettings = Seq(resolvers += alternativeLocalResolver)
+                          |  override lazy val projectSettings = Seq(resolvers ++= Seq(alternativeLocalResolver, DefaultMavenRepository))
                           |  lazy val alternativeLocalResolver = Resolver.file("$altLocalRepoName", file("$altLocalRepoPath"))(Resolver.ivyStylePatterns)
                           |}
                           |""".stripMargin)
