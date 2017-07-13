@@ -471,7 +471,7 @@ object Defaults extends BuildCommon {
         globalLock = launcher.globalLock,
         componentProvider = app.provider.components,
         secondaryCacheDir = Option(zincDir),
-        ivyConfiguration = bootIvyConfiguration.value,
+        libraryManagement = libraryManagement.value,
         compilerBridgeSource = scalaCompilerBridgeSource.value,
         scalaJarsTarget = zincDir,
         log = streams.value.log
@@ -1694,8 +1694,10 @@ object Classpaths {
     packagedArtifacts :== Map.empty,
     crossTarget := target.value,
     makePom := {
-      val config = makePomConfiguration.value;
-      IvyActions.makePom(ivyModule.value, config, streams.value.log); config.file
+      val config = makePomConfiguration.value
+      val lm = libraryManagement.value
+      lm.makePomFile(ivyModule.value, config, streams.value.log)
+      config.file
     },
     packagedArtifact in makePom := ((artifact in makePom).value -> makePom.value),
     deliver := deliverTask(deliverConfiguration).value,
@@ -1816,10 +1818,10 @@ object Classpaths {
     allDependencies := {
       projectDependencies.value ++ libraryDependencies.value
     },
-    ivyScala := (ivyScala or (
+    scalaModuleInfo := (scalaModuleInfo or (
       Def.setting {
         Option(
-          IvyScala(
+          ScalaModuleInfo(
             (scalaVersion in update).value,
             (scalaBinaryVersion in update).value,
             Vector.empty,
@@ -1841,23 +1843,26 @@ object Classpaths {
       val specialArtifactTypes = sourceArtifactTypes.value union docArtifactTypes.value
       // By default, to retrieve all types *but* these (it's assumed that everything else is binary/resource)
       UpdateConfiguration(
-        retrieve = retrieveConfiguration.value,
-        missingOk = false,
-        logging = ivyLoggingLevel.value,
-        artifactFilter = ArtifactTypeFilter.forbid(specialArtifactTypes),
-        offline = offline.value,
-        frozen = false
+        retrieveManaged = retrieveConfiguration.value,
+        missingOk = Some(false),
+        logging = Some(ivyLoggingLevel.value),
+        logicalClock = None,
+        metadataDirectory = None,
+        artifactFilter = Some(ArtifactTypeFilter.forbid(specialArtifactTypes)),
+        offline = Some(offline.value),
+        frozen = Some(false)
       )
     },
     retrieveConfiguration := {
       if (retrieveManaged.value)
         Some(
-          RetrieveConfiguration(managedDirectory.value,
-                                retrievePattern.value,
-                                retrieveManagedSync.value,
+          RetrieveConfiguration(Some(managedDirectory.value),
+                                Some(retrievePattern.value),
+                                Some(retrieveManagedSync.value),
                                 configurationsToRetrieve.value))
       else None
     },
+    libraryManagement := new IvyLibraryManagement(ivyConfiguration.value),
     ivyConfiguration := mkIvyConfiguration.value,
     ivyConfigurations := {
       val confs = thisProject.value.configurations
@@ -1961,7 +1966,7 @@ object Classpaths {
       val out = is.withIvy(s.log)(_.getSettings.getDefaultIvyUserDir)
       val uwConfig = (unresolvedWarningConfiguration in update).value
       val depDir = dependencyCacheDirectory.value
-      val ivy = ivyScala.value
+      val scalaModule = scalaModuleInfo.value
       val st = state.value
       withExcludes(out, mod.classifiers, lock(app)) { excludes =>
         IvyActions.updateClassifiers(
@@ -1969,7 +1974,7 @@ object Classpaths {
           GetClassifiersConfiguration(mod,
                                       excludes,
                                       c.withArtifactFilter(c.artifactFilter.invert),
-                                      ivy,
+                                      scalaModule,
                                       srcTypes,
                                       docTypes),
           uwConfig,
@@ -2000,7 +2005,7 @@ object Classpaths {
         else base
       val sbtOrg = scalaOrganization.value
       val version = scalaVersion.value
-      if (scalaHome.value.isDefined || ivyScala.value.isEmpty || !managedScalaInstance.value)
+      if (scalaHome.value.isDefined || scalaModuleInfo.value.isEmpty || !managedScalaInstance.value)
         pluginAdjust
       else {
         val isDotty = ScalaInstance.isDotty(version)
@@ -2042,7 +2047,7 @@ object Classpaths {
   def moduleSettings0: Initialize[Task[ModuleSettings]] = Def.task {
     InlineConfiguration(
       ivyValidate.value,
-      ivyScala.value,
+      scalaModuleInfo.value,
       projectID.value,
       projectInfo.value,
       allDependencies.value.toVector,
@@ -2091,45 +2096,47 @@ object Classpaths {
           // to fix https://github.com/sbt/sbt/issues/2686
           scalaVersion := appConfiguration.value.provider.scalaProvider.version,
           scalaBinaryVersion := binaryScalaVersion(scalaVersion.value),
-          ivyScala := {
+          scalaModuleInfo := {
             Some(
-              IvyScala(scalaVersion.value,
-                       scalaBinaryVersion.value,
-                       Vector(),
-                       checkExplicit = false,
-                       filterImplicit = false,
-                       overrideScalaVersion = true).withScalaOrganization(scalaOrganization.value))
+              ScalaModuleInfo(
+                scalaVersion.value,
+                scalaBinaryVersion.value,
+                Vector(),
+                checkExplicit = false,
+                filterImplicit = false,
+                overrideScalaVersion = true).withScalaOrganization(scalaOrganization.value))
           },
           updateSbtClassifiers in TaskGlobal := (Def.task {
+            val lm = libraryManagement.value
             val s = streams.value
             val is = ivySbt.value
             val mod = classifiersModule.value
             val c = updateConfiguration.value
             val app = appConfiguration.value
-            val srcTypes = sourceArtifactTypes.value
-            val docTypes = docArtifactTypes.value
+            val srcTypes = sourceArtifactTypes.value.toVector
+            val docTypes = docArtifactTypes.value.toVector
             val log = s.log
             val out = is.withIvy(log)(_.getSettings.getDefaultIvyUserDir)
             val uwConfig = (unresolvedWarningConfiguration in update).value
             val depDir = dependencyCacheDirectory.value
-            val ivy = ivyScala.value
+            val ivy = scalaModuleInfo.value
             val st = state.value
             withExcludes(out, mod.classifiers, lock(app)) { excludes =>
-              val noExplicitCheck = ivy.map(_.withCheckExplicit(false))
-              IvyActions.transitiveScratch(
-                is,
+              // val noExplicitCheck = ivy.map(_.withCheckExplicit(false))
+              lm.transitiveScratch(
                 "sbt",
-                GetClassifiersConfiguration(mod,
-                                            excludes,
-                                            c.withArtifactFilter(c.artifactFilter.invert),
-                                            noExplicitCheck,
-                                            srcTypes,
-                                            docTypes),
+                GetClassifiersConfiguration(
+                  mod,
+                  excludes,
+                  c.withArtifactFilter(c.artifactFilter.map(af => af.withInverted(!af.inverted))),
+                  srcTypes,
+                  docTypes),
                 uwConfig,
-                LogicalClock(st.hashCode),
-                Some(depDir),
                 log
-              )
+              ) match {
+                case Left(uw)  => ???
+                case Right(ur) => ur
+              }
             }
           } tag (Tags.Update, Tags.Network)).value
         )) ++ Seq(bootIvyConfiguration := (ivyConfiguration in updateSbtClassifiers).value)
@@ -2141,10 +2148,14 @@ object Classpaths {
       val pluginClasspath = loadedBuild.value.units(ref.build).unit.plugins.fullClasspath.toVector
       val pluginJars = pluginClasspath.filter(_.data.isFile) // exclude directories: an approximation to whether they've been published
       val pluginIDs: Vector[ModuleID] = pluginJars.flatMap(_ get moduleID.key)
-      GetClassifiersModule(projectID.value,
-                           sbtDependency.value +: pluginIDs,
-                           Vector(Configurations.Default),
-                           classifiers.toVector)
+      GetClassifiersModule(
+        projectID.value,
+        // TODO: Should it be sbt's scalaModuleInfo?
+        scalaModuleInfo.value,
+        sbtDependency.value +: pluginIDs,
+        Vector(Configurations.Default),
+        classifiers.toVector
+      )
     }
   def deliverTask(config: TaskKey[DeliverConfiguration]): Initialize[Task[File]] =
     Def.task {
@@ -2168,7 +2179,7 @@ object Classpaths {
     }
 
   def withExcludes(out: File, classifiers: Seq[String], lock: xsbti.GlobalLock)(
-      f: Map[ModuleID, Set[String]] => UpdateReport): UpdateReport = {
+      f: Vector[(ModuleID, Vector[String])] => UpdateReport): UpdateReport = {
     import sbt.librarymanagement.LibraryManagementCodec._
     import sbt.util.FileBasedStore
     implicit val isoString: sjsonnew.IsoString[scalajson.ast.unsafe.JValue] =
@@ -2185,7 +2196,7 @@ object Classpaths {
         def call = {
           implicit val midJsonKeyFmt: sjsonnew.JsonKeyFormat[ModuleID] = moduleIdJsonKeyFormat
           val excludes =
-            store.read[Map[ModuleID, Set[String]]](default = Map.empty[ModuleID, Set[String]])
+            store.read[Vector[(ModuleID, Vector[String])]](default = Vector.empty)
           val report = f(excludes)
           val allExcludes = excludes ++ IvyActions.extractExcludes(report)
           store.write(allExcludes)
@@ -2989,18 +3000,19 @@ trait BuildExtra extends BuildCommon with DefExtra {
     baseDirectory.value / name
   }
 
-  def externalIvyFile(
-      file: Initialize[File] = inBase("ivy.xml"),
-      iScala: Initialize[Option[IvyScala]] = ivyScala): Setting[Task[ModuleSettings]] =
+  def externalIvyFile(file: Initialize[File] = inBase("ivy.xml"),
+                      iScala: Initialize[Option[ScalaModuleInfo]] = scalaModuleInfo)
+    : Setting[Task[ModuleSettings]] =
     moduleSettings := IvyFileConfiguration(ivyValidate.value,
                                            iScala.value,
                                            file.value,
                                            managedScalaInstance.value)
 
   def externalPom(file: Initialize[File] = inBase("pom.xml"),
-                  iScala: Initialize[Option[IvyScala]] = ivyScala): Setting[Task[ModuleSettings]] =
+                  iScala: Initialize[Option[ScalaModuleInfo]] = scalaModuleInfo)
+    : Setting[Task[ModuleSettings]] =
     moduleSettings := PomConfiguration(ivyValidate.value,
-                                       ivyScala.value,
+                                       scalaModuleInfo.value,
                                        file.value,
                                        managedScalaInstance.value)
 

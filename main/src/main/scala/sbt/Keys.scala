@@ -52,33 +52,33 @@ import sbt.librarymanagement.{
   Developer,
   EvictionWarning,
   EvictionWarningOptions,
-  IvyScala,
+  GetClassifiersModule,
+  LibraryManagement,
+  MakePomConfiguration,
   MavenRepository,
   ModuleConfiguration,
   ModuleID,
   ModuleInfo,
   ModuleSettings,
+  PublishConfiguration,
   Resolver,
+  RetrieveConfiguration,
+  ScalaModuleInfo,
   ScalaVersion,
   ScmInfo,
   TrackLevel,
+  UnresolvedWarningConfiguration,
   UpdateConfiguration,
   UpdateOptions,
   UpdateLogging,
   UpdateReport
 }
-import sbt.librarymanagement.ExclusionRule
+import sbt.librarymanagement.{ ExclusionRule, DeliverConfiguration }
 import sbt.internal.librarymanagement.{
   CompatibilityWarningOptions,
-  DeliverConfiguration,
-  GetClassifiersModule,
   IvyConfiguration,
   IvyPaths,
-  IvySbt,
-  MakePomConfiguration,
-  PublishConfiguration,
-  RetrieveConfiguration,
-  UnresolvedWarningConfiguration
+  IvySbt
 }
 import sbt.util.{ Level, Logger }
 import org.apache.logging.log4j.core.Appender
@@ -331,6 +331,7 @@ object Keys {
   val dependencyClasspathAsJars = taskKey[Classpath]("The classpath consisting of internal and external, managed and unmanaged dependencies, all as JARs.")
   val fullClasspathAsJars = taskKey[Classpath]("The exported classpath, consisting of build products and unmanaged and managed, internal and external dependencies, all as JARs.")
 
+  val libraryManagement = SettingKey[LibraryManagement]("library-management", "Library management module to use", BSetting)
   val internalConfigurationMap = SettingKey[Configuration => Configuration]("internal-configuration-map", "Maps configurations to the actual configuration used to define the classpath.", CSetting)
   val classpathConfiguration = TaskKey[Configuration]("classpath-configuration", "The configuration used to define the classpath.", CTask)
   val ivyConfiguration = TaskKey[IvyConfiguration]("ivy-configuration", "General dependency management (Ivy) settings, such as the resolvers and paths to use.", DTask)
@@ -404,7 +405,7 @@ object Keys {
   val allDependencies = TaskKey[Seq[ModuleID]]("all-dependencies", "Inter-project and library dependencies.", CTask)
   val projectDependencies = TaskKey[Seq[ModuleID]]("project-dependencies", "Inter-project dependencies.", DTask)
   val ivyXML = SettingKey[NodeSeq]("ivy-xml", "Defines inline Ivy XML for configuring dependency management.", BSetting)
-  val ivyScala = SettingKey[Option[IvyScala]]("ivy-scala", "Configures how Scala dependencies are checked, filtered, and injected.", CSetting)
+  val scalaModuleInfo = SettingKey[Option[ScalaModuleInfo]]("scala-module-info", "Configures how Scala dependencies are checked, filtered, and injected.", CSetting)
   val ivyValidate = SettingKey[Boolean]("ivy-validate", "Enables/disables Ivy validation of module metadata.", BSetting)
   val ivyLoggingLevel = SettingKey[UpdateLogging]("ivy-logging-level", "The logging level for updating.", BSetting)
   val publishTo = TaskKey[Option[Resolver]]("publish-to", "The resolver to publish to.", ASetting)

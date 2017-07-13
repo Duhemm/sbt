@@ -13,9 +13,9 @@ object Dependencies {
 
   // sbt modules
   private val ioVersion = "1.0.0-M12"
-  private val utilVersion = "1.0.0-M25"
-  private val lmVersion = "1.0.0-X16"
-  private val zincVersion = "1.0.0-X17"
+  private val utilVersion = "1.0.0-M26"
+  private val lmVersion = "1.0.0-SNAPSHOT"
+  private val zincVersion = "1.0.0-X16-SNAPSHOT"
 
   private val sbtIO = "org.scala-sbt" %% "io" % ioVersion
 
@@ -31,7 +31,8 @@ object Dependencies {
   private val utilTesting = "org.scala-sbt" %% "util-testing" % utilVersion
   private val utilTracking = "org.scala-sbt" %% "util-tracking" % utilVersion
 
-  private val libraryManagement = "org.scala-sbt" %% "librarymanagement" % lmVersion
+  private val libraryManagementCore = "org.scala-sbt" %% "librarymanagement-core" % lmVersion
+  private val libraryManagementIvy = "org.scala-sbt" %% "librarymanagement-ivy" % lmVersion
 
   val launcherInterface = "org.scala-sbt" % "launcher-interface" % "1.0.0"
   val rawLauncher = "org.scala-sbt" % "launcher" % "1.0.0"
@@ -93,7 +94,8 @@ object Dependencies {
   def addSbtUtilTracking(p: Project): Project =
     addSbtModule(p, sbtUtilPath, "utilTracking", utilTracking)
 
-  def addSbtLm(p: Project): Project = addSbtModule(p, sbtLmPath, "lm", libraryManagement)
+  def addSbtLmCore(p: Project): Project = addSbtModule(p, sbtLmPath, "lmCore", libraryManagementCore)
+  def addSbtLmIvy(p: Project): Project = addSbtModule(p, sbtLmPath, "lmIvy", libraryManagementIvy)
 
   def addSbtCompilerApiInfo(p: Project): Project =
     addSbtModule(p, sbtZincPath, "zincApiInfo", compilerApiInfo)
