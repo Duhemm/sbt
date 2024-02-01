@@ -1230,6 +1230,7 @@ def scriptedTask(launch: Boolean): Def.Initialize[InputTask[Unit]] = Def.inputTa
     (scriptedSbtReduxProj / scalaInstance).value,
     scriptedSource.value,
     scriptedBufferLog.value,
+    testListeners.value.toArray,
     Def.setting(Scripted.scriptedParser(scriptedSource.value)).parsed,
     scriptedPrescripted.value,
     scriptedLaunchOpts.value ++ (if (launch) Some(launchJar) else None),

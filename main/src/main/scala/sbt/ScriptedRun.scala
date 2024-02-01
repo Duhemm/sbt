@@ -10,11 +10,13 @@ package sbt
 import java.io.File
 import java.lang.reflect.Method
 import scala.annotation.unused
+import sbt.TestReportListener
 
 sealed trait ScriptedRun {
   final def run(
       resourceBaseDirectory: File,
       bufferLog: Boolean,
+      testReportListeners: Array[TestReportListener],
       tests: Seq[String],
       launcherJar: File,
       javaCommand: String,
@@ -26,6 +28,7 @@ sealed trait ScriptedRun {
       invoke(
         resourceBaseDirectory,
         bufferLog,
+        testReportListeners,
         tests.toArray,
         launcherJar,
         javaCommand,
@@ -40,6 +43,7 @@ sealed trait ScriptedRun {
   protected def invoke(
       resourceBaseDirectory: File,
       bufferLog: java.lang.Boolean,
+      testReportListeners: Array[TestReportListener],
       tests: Array[String],
       launcherJar: File,
       javaCommand: String,
@@ -55,34 +59,50 @@ object ScriptedRun {
   def of(scriptedTests: AnyRef, batchExecution: Boolean): ScriptedRun = {
     val fCls = classOf[File]
     val bCls = classOf[Boolean]
+    val atrlCls = classOf[Array[TestReportListener]]
     val asCls = classOf[Array[String]]
     val sCls = classOf[String]
     val lfCls = classOf[java.util.List[File]]
     val iCls = classOf[Int]
 
     val clazz = scriptedTests.getClass
+    println("Clazz = " + clazz)
     if (batchExecution)
       try
         new RunInParallelV2(
           scriptedTests,
-          clazz.getMethod("runInParallel", fCls, bCls, asCls, fCls, sCls, asCls, lfCls, iCls)
+          clazz.getMethod(
+            "runInParallel",
+            fCls,
+            bCls,
+            atrlCls,
+            asCls,
+            fCls,
+            sCls,
+            asCls,
+            lfCls,
+            iCls
+          )
         )
       catch {
         case _: NoSuchMethodException =>
           new RunInParallelV1(
             scriptedTests,
-            clazz.getMethod("runInParallel", fCls, bCls, asCls, fCls, asCls, lfCls, iCls)
+            clazz.getMethod("runInParallel", fCls, bCls, atrlCls, asCls, fCls, asCls, lfCls, iCls)
           )
       }
     else
       try
         new RunV2(
           scriptedTests,
-          clazz.getMethod("run", fCls, bCls, asCls, fCls, sCls, asCls, lfCls)
+          clazz.getMethod("run", fCls, bCls, atrlCls, asCls, fCls, sCls, asCls, lfCls)
         )
       catch {
         case _: NoSuchMethodException =>
-          new RunV1(scriptedTests, clazz.getMethod("run", fCls, bCls, asCls, fCls, asCls, lfCls))
+          new RunV1(
+            scriptedTests,
+            clazz.getMethod("run", fCls, bCls, atrlCls, asCls, fCls, asCls, lfCls)
+          )
       }
   }
 
@@ -90,6 +110,7 @@ object ScriptedRun {
     override protected def invoke(
         resourceBaseDirectory: File,
         bufferLog: java.lang.Boolean,
+        testReportListeners: Array[TestReportListener],
         tests: Array[String],
         launcherJar: File,
         @unused javaCommand: String,
@@ -100,6 +121,7 @@ object ScriptedRun {
       run.invoke(
         scriptedTests,
         resourceBaseDirectory,
+        testReportListeners,
         bufferLog,
         tests,
         launcherJar,
@@ -112,6 +134,7 @@ object ScriptedRun {
     override protected def invoke(
         resourceBaseDirectory: File,
         bufferLog: java.lang.Boolean,
+        testReportListeners: Array[TestReportListener],
         tests: Array[String],
         launcherJar: File,
         @unused javaCommand: String,
@@ -122,6 +145,7 @@ object ScriptedRun {
       runInParallel.invoke(
         scriptedTests,
         resourceBaseDirectory,
+        testReportListeners,
         bufferLog,
         tests,
         launcherJar,
@@ -135,6 +159,7 @@ object ScriptedRun {
     override protected def invoke(
         resourceBaseDirectory: File,
         bufferLog: java.lang.Boolean,
+        testReportListeners: Array[TestReportListener],
         tests: Array[String],
         launcherJar: File,
         javaCommand: String,
@@ -145,6 +170,7 @@ object ScriptedRun {
       run.invoke(
         scriptedTests,
         resourceBaseDirectory,
+        testReportListeners,
         bufferLog,
         tests,
         launcherJar,
@@ -158,6 +184,7 @@ object ScriptedRun {
     override protected def invoke(
         resourceBaseDirectory: File,
         bufferLog: java.lang.Boolean,
+        testReportListeners: Array[TestReportListener],
         tests: Array[String],
         launcherJar: File,
         javaCommand: String,
@@ -168,6 +195,7 @@ object ScriptedRun {
       runInParallel.invoke(
         scriptedTests,
         resourceBaseDirectory,
+        testReportListeners,
         bufferLog,
         tests,
         launcherJar,

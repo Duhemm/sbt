@@ -93,6 +93,7 @@ object Scripted {
       scriptedSbtInstance: ScalaInstance,
       sourcePath: File,
       bufferLog: Boolean,
+      testReportListeners: Array[TestReportListener],
       args: Seq[String],
       prescripted: File => Unit,
       launchOpts: Seq[String],
@@ -129,6 +130,7 @@ object Scripted {
       def runInParallel(
           resourceBaseDirectory: File,
           bufferLog: Boolean,
+          testReportListeners: Array[TestReportListener],
           tests: Array[String],
           launcherJar: File,
           javaCommand: String,
@@ -173,6 +175,7 @@ object Scripted {
         bridge.runInParallel(
           sourcePath,
           bufferLog,
+          testReportListeners,
           args.toArray,
           launcherJar,
           "java",

@@ -354,6 +354,7 @@ object ScriptedTests extends ScriptedRunner {
     runInParallel(
       directory,
       buffer,
+      Array.empty[TestReportListener],
       tests,
       logger,
       Array(),
@@ -387,6 +388,7 @@ class ScriptedRunner {
     run(
       resourceBaseDirectory,
       bufferLog,
+      Array.empty[TestReportListener],
       tests,
       logger,
       javaCommand = "java",
@@ -416,6 +418,7 @@ class ScriptedRunner {
     run(
       resourceBaseDirectory,
       bufferLog,
+      Array.empty[TestReportListener],
       tests,
       logger,
       javaCommand = "java",
@@ -435,6 +438,7 @@ class ScriptedRunner {
   def run(
       resourceBaseDirectory: File,
       bufferLog: Boolean,
+      testListeners: Array[TestReportListener],
       tests: Array[String],
       launcherJar: File,
       javaCommand: String,
@@ -445,6 +449,7 @@ class ScriptedRunner {
     run(
       resourceBaseDirectory,
       bufferLog,
+      testListeners,
       tests,
       logger,
       javaCommand,
@@ -475,6 +480,7 @@ class ScriptedRunner {
     runInParallel(
       resourceBaseDirectory,
       bufferLog,
+      Array.empty[TestReportListener],
       tests,
       logger,
       javaCommand = "java",
@@ -493,6 +499,7 @@ class ScriptedRunner {
   def runInParallel(
       resourceBaseDirectory: File,
       bufferLog: Boolean,
+      testListeners: Array[TestReportListener],
       tests: Array[String],
       launcherJar: File,
       javaCommand: String,
@@ -504,6 +511,7 @@ class ScriptedRunner {
     runInParallel(
       resourceBaseDirectory,
       bufferLog,
+      testListeners,
       tests,
       logger,
       javaCommand,
@@ -519,6 +527,7 @@ class ScriptedRunner {
   def runInParallel(
       baseDir: File,
       bufferLog: Boolean,
+      testListeners: Array[TestReportListener],
       tests: Array[String],
       logger: Logger,
       launchOpts: Array[String],
@@ -531,6 +540,7 @@ class ScriptedRunner {
     runInParallel(
       baseDir,
       bufferLog,
+      testListeners,
       tests,
       logger,
       javaCommand = "java",
@@ -543,6 +553,7 @@ class ScriptedRunner {
   private[sbt] def runInParallel(
       baseDir: File,
       bufferLog: Boolean,
+      testListeners: Array[TestReportListener],
       tests: Array[String],
       logger: Logger,
       javaCommand: String,
@@ -554,6 +565,7 @@ class ScriptedRunner {
     run(
       baseDir,
       bufferLog,
+      testListeners,
       tests,
       logger,
       javaCommand,
@@ -568,6 +580,7 @@ class ScriptedRunner {
   private[this] def run(
       baseDir: File,
       bufferLog: Boolean,
+      testListeners: Array[TestReportListener],
       tests: Array[String],
       logger: Logger,
       javaCommand: String,
@@ -605,6 +618,7 @@ class ScriptedRunner {
   def runInParallel(
       baseDir: File,
       bufferLog: Boolean,
+      testListeners: Array[TestReportListener],
       tests: Array[String],
       launchOpts: Array[String],
       prescripted: java.util.List[File],
@@ -616,6 +630,7 @@ class ScriptedRunner {
     runInParallel(
       baseDir,
       bufferLog,
+      testListeners,
       tests,
       TestConsoleLogger(),
       launchOpts,

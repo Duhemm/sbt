@@ -79,6 +79,7 @@ object ScriptedPlugin extends AutoPlugin {
         )
       case Some((2, _)) =>
         Seq(
+          "org.scala-sbt" %% "scripted-sbt-redux" % scriptedSbt.value % ScriptedConf,
           "org.scala-sbt" % "sbt-launch" % scriptedSbt.value % ScriptedLaunchConf
         )
       case Some((x, y)) => sys error s"Unknown sbt version ${scriptedSbt.value} ($x.$y)"
@@ -110,6 +111,10 @@ object ScriptedPlugin extends AutoPlugin {
   private[sbt] def scriptedTestsTask: Initialize[Task[AnyRef]] =
     Def.task {
       val cp = scriptedClasspath.value.get().map(_.toPath)
+      println("-" * 100)
+      println("Classpath:")
+      cp.foreach(println)
+      println("-" * 100)
       val loader = ClasspathUtil.toLoader(cp, scalaInstance.value.loader)
       try {
         ModuleUtilities.getObject("sbt.scriptedtest.ScriptedTests", loader)
@@ -187,6 +192,7 @@ object ScriptedPlugin extends AutoPlugin {
       scriptedRun.value.run(
         sbtTestDirectory.value,
         scriptedBufferLog.value,
+        testListeners.value.toArray,
         args,
         sbtLauncher.value,
         Fork.javaCommand((scripted / javaHome).value, "java").getAbsolutePath,
