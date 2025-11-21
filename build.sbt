@@ -1508,3 +1508,9 @@ ThisBuild / publishTo := {
   else localStaging.value
 }
 ThisBuild / publishMavenStyle := true
+
+ThisBuild / develocityConfiguration ~= { prev =>
+  prev.withServer(
+    prev.server.withUrl(Some(url("https://dv-helm-cluster-unstable-main.grdev.net")))
+  )
+}
